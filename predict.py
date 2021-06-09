@@ -20,6 +20,8 @@ def predict_test(args):
 
     wav_paths = glob('{}/**'.format(args.src_dir), recursive=True)
     wav_paths = sorted([x.replace(os.sep, '/') for x in wav_paths if '.wav' in x])
+    preds = []
+    file_names = []
 
     for z, wav_fn in tqdm(enumerate(wav_paths), total=len(wav_paths)):
         rate, wav = downsample_mono(wav_fn, args.sr)
@@ -27,7 +29,6 @@ def predict_test(args):
         clean_wav = wav[mask]
         step = int(args.sr*args.dt)
         batch = []
-        results = []
 
         for i in range(0, clean_wav.shape[0], step):
             sample = clean_wav[i:i+step]
@@ -44,11 +45,14 @@ def predict_test(args):
 
         classes = ['bird', 'eight', 'falcon', 'five', 'four', 'nine', 'one', 'seven', 'six', 'snake', 'three', 'two', 'zero']
         
-        
-        print('File: {} Predicted class: {}'.format(wav_paths[z], classes[y_pred]))
-        results.append(y_mean)
+        pred = classes[y_pred]
+        file_name = wav_paths[z].split('/')[-1][3:]
+        print('File: {} Predicted class: {}'.format(file_name, pred))
+        preds.append(pred)
+        file_names.append(file_name)
 
-    np.save(os.path.join('logs', args.pred_fn), np.array(results))
+    df = pd.DataFrame({'a':file_names, 'b':preds})
+    df.to_csv(os.path.join('logs', args.pred_fn + '.csv'), index=False, header=False)
 
 def make_prediction(args):
 
@@ -87,7 +91,6 @@ def make_prediction(args):
         real_class = os.path.dirname(wav_fn).split('/')[-1]
         print('Actual class: {}, Predicted class: {}'.format(real_class, classes[y_pred]))
         results.append(y_mean)
-
     np.save(os.path.join('logs', args.pred_fn), np.array(results))
 
 
@@ -108,5 +111,5 @@ if __name__ == '__main__':
                         help='threshold magnitude for np.int16 dtype')
     args, _ = parser.parse_known_args()
 
-    make_prediction(args)
+    predict_test(args)
 
