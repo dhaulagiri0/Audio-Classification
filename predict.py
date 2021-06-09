@@ -27,6 +27,7 @@ def predict_test(args):
         clean_wav = wav[mask]
         step = int(args.sr*args.dt)
         batch = []
+        results = []
 
         for i in range(0, clean_wav.shape[0], step):
             sample = clean_wav[i:i+step]
@@ -42,8 +43,9 @@ def predict_test(args):
         y_pred = np.argmax(y_mean)
 
         classes = ['bird', 'eight', 'falcon', 'five', 'four', 'nine', 'one', 'seven', 'six', 'snake', 'three', 'two', 'zero']
-
-        print('Predicted class: {}'.format(classes[y_pred]))
+        
+        
+        print('File: {} Predicted class: {}'.format(wav_paths[z], classes[y_pred]))
         results.append(y_mean)
 
     np.save(os.path.join('logs', args.pred_fn), np.array(results))
