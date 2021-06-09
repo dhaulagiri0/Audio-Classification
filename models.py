@@ -3,12 +3,19 @@ from tensorflow.keras import layers
 from tensorflow.keras.layers import TimeDistributed, LayerNormalization
 from tensorflow.keras.models import Model
 from tensorflow.keras.regularizers import l2
+from tensorflow.python.keras.backend_config import epsilon
 import kapre
 from kapre.composed import get_melspectrogram_layer
 import tensorflow as tf
+import tensorflow.keras.backend as K
 import os
 from PIL import Image
 import numpy as np
+
+
+def log_fn(x):
+    epsilon = 1e-6
+    return tf.math.log(tf.math.abs(x) + epsilon)
 
 
 def Conv1D(N_CLASSES=10, SR=16000, DT=1.0):
@@ -45,7 +52,6 @@ def Conv1D(N_CLASSES=10, SR=16000, DT=1.0):
 
 def ConvDense(N_CLASSES=10, SR=16000, DT=1.0):
     input_shape = (int(SR*DT), 1)
-    eps = 1e-6
 
     input_layer = layers.Input(input_shape)
 
@@ -61,8 +67,7 @@ def ConvDense(N_CLASSES=10, SR=16000, DT=1.0):
                                  output_data_format='channels_last',
                                  name='mel1')(input_layer)
 
-    spec1 = i1
-    # spec1 = layers.Lambda(lambda x: tf.math.log(x))(spec1)
+    spec1 = layers.Lambda(log_fn)(i1)
     spec1 = layers.experimental.preprocessing.Resizing(250, 128)(spec1)
     
 
@@ -78,8 +83,7 @@ def ConvDense(N_CLASSES=10, SR=16000, DT=1.0):
                                 output_data_format='channels_last',
                                 name='mel2')(input_layer)
 
-    spec2 = i2
-    # spec2 = tf.math.log(spec2+ eps)
+    spec2 = layers.Lambda(log_fn)(i2)
     spec2 = layers.experimental.preprocessing.Resizing(250, 128)(spec2)
 
     i3 = get_melspectrogram_layer(input_shape=input_shape,
@@ -94,8 +98,7 @@ def ConvDense(N_CLASSES=10, SR=16000, DT=1.0):
                                 output_data_format='channels_last',
                                 name='mel3')(input_layer)
 
-    spec3 = i3
-    # spec3 = tf.math.log(spec3 + eps)
+    spec3 = layers.Lambda(log_fn)(i3)
     spec3 = layers.experimental.preprocessing.Resizing(250, 128)(spec3)
 
     x = layers.concatenate([spec1, spec2, spec3])
