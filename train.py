@@ -8,7 +8,7 @@ import numpy as np
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
-from models import Conv1D, Conv2D, LSTM
+from models import Conv1D, Conv2D, LSTM, ConvDense
 from tqdm import tqdm
 from glob import glob
 import argparse
@@ -67,7 +67,8 @@ def train(args):
               'DT':dt}
     models = {'conv1d':Conv1D(**params),
               'conv2d':Conv2D(**params),
-              'lstm':  LSTM(**params)}
+              'lstm':  LSTM(**params),
+              'dense': ConvDense(**params)}
     assert model_type in models.keys(), '{} not an available model'.format(model_type)
     csv_path = os.path.join('logs', '{}_history.csv'.format(model_type))
 
@@ -106,7 +107,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Audio Classification Training')
     parser.add_argument('--model_type', type=str, default='lstm',
-                        help='model to run. i.e. conv1d, conv2d, lstm')
+                        help='model to run. i.e. conv1d, conv2d, lstm, dense')
     parser.add_argument('--src_root', type=str, default='clean',
                         help='directory of audio files in total duration')
     parser.add_argument('--batch_size', type=int, default=16,

@@ -1,3 +1,4 @@
+from unicodedata import name
 from tensorflow.keras import layers
 from tensorflow.keras.layers import TimeDistributed, LayerNormalization
 from tensorflow.keras.models import Model
@@ -6,6 +7,8 @@ import kapre
 from kapre.composed import get_melspectrogram_layer
 import tensorflow as tf
 import os
+from PIL import Image
+import numpy as np
 
 
 def Conv1D(N_CLASSES=10, SR=16000, DT=1.0):
@@ -40,6 +43,80 @@ def Conv1D(N_CLASSES=10, SR=16000, DT=1.0):
                   metrics=['accuracy'])
     return model
 
+def ConvDense(N_CLASSES=10, SR=16000, DT=1.0):
+    input_shape = (int(SR*DT), 1)
+    eps = 1e-6
+
+    input_layer = layers.Input(input_shape)
+
+    i1 = get_melspectrogram_layer(input_shape=input_shape,
+                                 n_mels=128,
+                                 pad_end=True,
+                                 n_fft=512,
+                                 win_length=int(25 * SR / 1000),
+                                 hop_length=int(10 * SR / 1000),
+                                 sample_rate=SR,
+                                 return_decibel=True,
+                                 input_data_format='channels_last',
+                                 output_data_format='channels_last',
+                                 name='mel1')(input_layer)
+
+    spec1 = i1
+    # spec1 = layers.Lambda(lambda x: tf.math.log(x))(spec1)
+    spec1 = layers.experimental.preprocessing.Resizing(250, 128)(spec1)
+    
+
+    i2 = get_melspectrogram_layer(input_shape=input_shape,
+                                n_mels=128,
+                                pad_end=True,
+                                n_fft=512,
+                                win_length=int(50 * SR / 1000),
+                                hop_length=int(25 * SR / 1000),
+                                sample_rate=SR,
+                                return_decibel=True,
+                                input_data_format='channels_last',
+                                output_data_format='channels_last',
+                                name='mel2')(input_layer)
+
+    spec2 = i2
+    # spec2 = tf.math.log(spec2+ eps)
+    spec2 = layers.experimental.preprocessing.Resizing(250, 128)(spec2)
+
+    i3 = get_melspectrogram_layer(input_shape=input_shape,
+                                n_mels=128,
+                                pad_end=True,
+                                n_fft=512,
+                                win_length=int(100 * SR / 1000),
+                                hop_length=int(50 * SR / 1000),
+                                sample_rate=SR,
+                                return_decibel=True,
+                                input_data_format='channels_last',
+                                output_data_format='channels_last',
+                                name='mel3')(input_layer)
+
+    spec3 = i3
+    # spec3 = tf.math.log(spec3 + eps)
+    spec3 = layers.experimental.preprocessing.Resizing(250, 128)(spec3)
+
+    x = layers.concatenate([spec1, spec2, spec3])
+    x = LayerNormalization(axis=2, name='batch_norm')(x)
+
+    densenet = tf.keras.applications.DenseNet121(
+        include_top=False, weights='imagenet', input_shape=(250, 128, 3), pooling=None
+    )
+
+    denseout = densenet(x)
+    x = layers.GlobalAveragePooling2D(name='avgpool')(denseout)
+    x = layers.Dropout(rate=0.2, name='dropout')(x)
+    x = layers.Dense(1025, activation='relu', activity_regularizer=l2(0.001), name='dense')(x)
+    o = layers.Dense(N_CLASSES, activation='softmax', name='softmax')(x)
+
+    model = Model(inputs=input_layer, outputs=o, name='densenet')
+    model.compile(optimizer='adam',
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+    model.summary()
+    return model
 
 def Conv2D(N_CLASSES=10, SR=16000, DT=1.0):
     input_shape = (int(SR*DT), 1)
