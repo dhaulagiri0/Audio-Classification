@@ -46,7 +46,7 @@ def predict_test(args):
         classes = ['bird', 'eight', 'falcon', 'five', 'four', 'nine', 'one', 'seven', 'six', 'snake', 'three', 'two', 'zero']
         
         pred = classes[y_pred]
-        file_name = wav_paths[z].split('/')[-1][3:]
+        file_name = wav_paths[z].split('/')[-1]
         print('File: {} Predicted class: {}'.format(file_name, pred))
         preds.append(pred)
         file_names.append(file_name)
