@@ -1,3 +1,4 @@
+import tensorflow as tf
 from tensorflow.keras.models import load_model
 from clean import downsample_mono, envelope
 from kapre.time_frequency import STFT, Magnitude, ApplyFilterbank, MagnitudeToDecibel
@@ -9,6 +10,7 @@ import os
 import pandas as pd
 from tqdm import tqdm
 
+
 # custom predict function to predict test data
 def predict_test(args):
     # load model
@@ -16,6 +18,7 @@ def predict_test(args):
     custom_objects={'STFT':STFT,
                     'Magnitude':Magnitude,
                     'ApplyFilterbank':ApplyFilterbank,
+                    'tf': tf,
                     'MagnitudeToDecibel':MagnitudeToDecibel})
 
     wav_paths = glob('{}/**'.format(args.src_dir), recursive=True)
