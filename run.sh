@@ -19,8 +19,8 @@ do
                         --epochs=1 \
                         --spectrogram_width=$spectrogram_width \
                         --n_fft=$n_fft \
-                        --n_dropout_1=$n_dropout_1 \
-                        --n_dropout_2=$n_dropout_2 \
+                        --dropout_1=$dropout_1 \
+                        --dropout_2=$dropout_2 \
                         --n_neurons=$n_neurons \
                         --l2_lambda=$l2_lambda
                     done

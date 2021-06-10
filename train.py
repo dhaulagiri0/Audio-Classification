@@ -58,19 +58,17 @@ class DataGenerator(tf.keras.utils.Sequence):
 
 def train(args):
     hparams = {
-        'n_classes': len(os.listdir(args.src_root)),
-        'sr': args.sr,
-        'dt': args.dt,
-        'n_mels': args.n_mels,
-        'spectrogram_width': args.spectrogram_width,
-        'spectrogram_height': args.spectrogram_height,
-        'n_fft': args.n_fft,
-        'dropout_1': args.dropout_1,
-        'dropout_2': args.dropout_2,
-        'n_neurons': args.n_neurons,
-        'l2_lambda': args.l2_lambda
+        hp.HParam('n_mels'): args.n_mels,
+        hp.HParam('spectrogram_width'): args.spectrogram_width,
+        hp.HParam('spectrogram_height'): args.spectrogram_height,
+        hp.HParam('n_fft'): args.n_fft,
+        hp.HParam('dropout_1'): args.dropout_1,
+        hp.HParam('dropout_2'): args.dropout_2,
+        hp.HParam('n_neurons'): args.n_neurons,
+        hp.HParam('l2_lambda'): args.l2_lambda
     }
-    model = ConvDense(**hparams)
+    n_classes = len(os.listdir(args.src_root))
+    model = ConvDense(n_classes, args.sr, args.dt, args.n_mels, args.spectrogram_width, args.spectrogram_height, args.n_fft, args.dropout_1, args.dropout_2, args.n_neurons, args.l2_lambda)
 
     wav_paths = glob(f'{args.src_root}/**', recursive=True)
     wav_paths = [x.replace(os.sep, '/') for x in wav_paths if '.wav' in x]
@@ -82,13 +80,13 @@ def train(args):
     wav_train, wav_val, label_train, label_val = train_test_split(wav_paths, labels, test_size=0.1, random_state=0)
 
     assert len(label_train) >= args.batch_size, 'Number of train samples must be >= batch_size'
-    if len(set(label_train)) != hparams['n_classes']:
-        warnings.warn(f"Found {len(set(label_train))}/{hparams['n_classes']} classes in training data. Increase data size or change random_state.")
-    if len(set(label_val)) != hparams['n_classes']:
-        warnings.warn(f"Found {len(set(label_val))}/{hparams['n_classes']} classes in validation data. Increase data size or change random_state.")
+    if len(set(label_train)) != n_classes:
+        warnings.warn(f"Found {len(set(label_train))}/{n_classes} classes in training data. Increase data size or change random_state.")
+    if len(set(label_val)) != n_classes:
+        warnings.warn(f"Found {len(set(label_val))}/{n_classes} classes in validation data. Increase data size or change random_state.")
 
-    tg = DataGenerator(wav_train, label_train, args.sr, args.dt, hparams['n_classes'], batch_size=args.batch_size)
-    vg = DataGenerator(wav_val, label_val, args.sr, args.dt, hparams['n_classes'], batch_size=args.batch_size)
+    tg = DataGenerator(wav_train, label_train, args.sr, args.dt, n_classes, batch_size=args.batch_size)
+    vg = DataGenerator(wav_val, label_val, args.sr, args.dt, n_classes, batch_size=args.batch_size)
     runtime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     cp_best_val_acc = ModelCheckpoint(os.path.join(args.output_root, runtime, 'best_val_acc.h5'), monitor='val_accuracy',
                          save_best_only=True, save_weights_only=False,
