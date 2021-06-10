@@ -1,19 +1,19 @@
 import tensorflow as tf
-from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
-from tensorflow.keras.utils import to_categorical
-import os
-from scipy.io import wavfile
 import pandas as pd
 import numpy as np
-from sklearn.utils.class_weight import compute_class_weight
-from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split
-from models import Conv1D, Conv2D, LSTM, ConvDense
-from tqdm import tqdm
-from glob import glob
 import argparse
 import warnings
+import os
+import datetime
 
+from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau, EarlyStopping
+from tensorflow.keras.utils import to_categorical
+from scipy.io import wavfile
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from models import ConvDense
+from glob import glob
+from tensorboard.plugins.hparams import api as hp
 
 class DataGenerator(tf.keras.utils.Sequence):
     def __init__(self, wav_paths, labels, sr, dt, n_classes,
@@ -57,66 +57,78 @@ class DataGenerator(tf.keras.utils.Sequence):
 
 
 def train(args):
-    src_root = args.src_root
-    sr = args.sample_rate
-    dt = args.delta_time
-    batch_size = args.batch_size
-    model_type = args.model_type
-    params = {'N_CLASSES':len(os.listdir(args.src_root)),
-              'SR':sr,
-              'DT':dt}
-    models = {'conv1d':Conv1D(**params),
-              'conv2d':Conv2D(**params),
-              'lstm':  LSTM(**params),
-              'dense': ConvDense(**params)}
-    assert model_type in models.keys(), '{} not an available model'.format(model_type)
-    csv_path = os.path.join('logs', '{}_history.csv'.format(model_type))
+    hparams = {
+        'n_classes': len(os.listdir(args.src_root)),
+        'sr': args.sr,
+        'dt': args.dt,
+        'n_mels': args.n_mels,
+        'spectrogram_width': args.spectrogram_width,
+        'spectrogram_height': args.spectrogram_height,
+        'n_fft': args.n_fft,
+        'dropout_1': args.dropout_1,
+        'dropout_2': args.dropout_2,
+        'n_neurons': args.n_neurons,
+        'l2_lambda': args.l2_lambda
+    }
+    model = ConvDense(**hparams)
 
-    wav_paths = glob('{}/**'.format(src_root), recursive=True)
+    wav_paths = glob(f'{args.src_root}/**', recursive=True)
     wav_paths = [x.replace(os.sep, '/') for x in wav_paths if '.wav' in x]
     classes = sorted(os.listdir(args.src_root))
     le = LabelEncoder()
     le.fit(classes)
     labels = [os.path.split(x)[0].split('/')[-1] for x in wav_paths]
     labels = le.transform(labels)
-    wav_train, wav_val, label_train, label_val = train_test_split(wav_paths,
-                                                                  labels,
-                                                                  test_size=0.1,
-                                                                  random_state=0)
+    wav_train, wav_val, label_train, label_val = train_test_split(wav_paths, labels, test_size=0.1, random_state=0)
 
     assert len(label_train) >= args.batch_size, 'Number of train samples must be >= batch_size'
-    if len(set(label_train)) != params['N_CLASSES']:
-        warnings.warn('Found {}/{} classes in training data. Increase data size or change random_state.'.format(len(set(label_train)), params['N_CLASSES']))
-    if len(set(label_val)) != params['N_CLASSES']:
-        warnings.warn('Found {}/{} classes in validation data. Increase data size or change random_state.'.format(len(set(label_val)), params['N_CLASSES']))
+    if len(set(label_train)) != hparams['n_classes']:
+        warnings.warn(f"Found {len(set(label_train))}/{hparams['n_classes']} classes in training data. Increase data size or change random_state.")
+    if len(set(label_val)) != hparams['n_classes']:
+        warnings.warn(f"Found {len(set(label_val))}/{hparams['n_classes']} classes in validation data. Increase data size or change random_state.")
 
-    tg = DataGenerator(wav_train, label_train, sr, dt,
-                       params['N_CLASSES'], batch_size=batch_size)
-    vg = DataGenerator(wav_val, label_val, sr, dt,
-                       params['N_CLASSES'], batch_size=batch_size)
-    model = models[model_type]
-    cp = ModelCheckpoint('models/{}.h5'.format(model_type), monitor='val_loss',
+    tg = DataGenerator(wav_train, label_train, args.sr, args.dt, hparams['n_classes'], batch_size=args.batch_size)
+    vg = DataGenerator(wav_val, label_val, args.sr, args.dt, hparams['n_classes'], batch_size=args.batch_size)
+    runtime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    cp_best_val_acc = ModelCheckpoint(os.path.join(args.output_root, runtime, 'best_val_acc.h5'), monitor='val_accuracy',
                          save_best_only=True, save_weights_only=False,
                          mode='auto', save_freq='epoch', verbose=1)
-    csv_logger = CSVLogger(csv_path, append=False)
+    cp_best_val_loss = ModelCheckpoint(os.path.join(args.output_root, runtime, 'best_val_loss.h5'), monitor='val_loss',
+                         save_best_only=True, save_weights_only=False,
+                         mode='auto', save_freq='epoch', verbose=1)
+    tb = TensorBoard(os.path.join(args.output_root, runtime, 'logs'), histogram_freq=1)
+    hparams_dir = os.path.join(args.output_root, runtime, 'logs', 'validation')
+    with tf.summary.create_file_writer(hparams_dir).as_default():
+        hp.hparams_config(
+            hparams=hparams,
+            metrics=[hp.Metric('epoch_accuracy')]
+        )
+    hparams_cb = hp.KerasCallback(writer=hparams_dir, hparams=hparams)
+    reduce_lr = ReduceLROnPlateau(monitor='val_accuracy', factor=0.1, patience=5, verbose=1)
+    early_stopping = EarlyStopping(monitor='val_accuracy', patience=10, verbose=1)
+
     model.fit(tg, validation_data=vg,
-              epochs=30, verbose=1,
-              callbacks=[csv_logger, cp])
+              epochs=args.epochs, verbose=1,
+              callbacks=[cp_best_val_acc, cp_best_val_loss, tb, hparams_cb, reduce_lr, early_stopping])
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser(description='Audio Classification Training')
-    parser.add_argument('--model_type', type=str, default='lstm',
-                        help='model to run. i.e. conv1d, conv2d, lstm, dense')
-    parser.add_argument('--src_root', type=str, default='clean',
-                        help='directory of audio files in total duration')
-    parser.add_argument('--batch_size', type=int, default=16,
-                        help='batch size')
-    parser.add_argument('--delta_time', '-dt', type=float, default=1.0,
-                        help='time in seconds to sample audio')
-    parser.add_argument('--sample_rate', '-sr', type=int, default=16000,
-                        help='sample rate of clean audio')
-    args, _ = parser.parse_known_args()
+    parser.add_argument('--src_root', type=str, default='clean', help='directory of audio files in total duration')
+    parser.add_argument('--output_root', type=str, default='runs', help='directory to store output model files and logs')
+    parser.add_argument('--epochs', type=int, default=100, help='number of epochs to do')
+    parser.add_argument('--dt', type=float, default=1.0, help='time in seconds to sample audio')
+    parser.add_argument('--sr', type=int, default=22050, help='sample rate of clean audio')
+    # hyperparameters to try
+    parser.add_argument('--batch_size', type=int, default=16, help='batch size')
+    parser.add_argument('--n_mels', type=int, default=128, help='number of melspectrograms')
+    parser.add_argument('--spectrogram_width', type=int, default=250, help='width of resized melspectrogram')
+    parser.add_argument('--spectrogram_height', type=int, default=128, help='height of resized melspectrogram')
+    parser.add_argument('--n_fft', type=int, help='number of fast fourier transform frequencies to analyze')
+    parser.add_argument('--dropout_1', type=float, help='dropout rate between densenet and FCL')
+    parser.add_argument('--dropout_2', type=float, help='dropout rate between FCL and last layer')
+    parser.add_argument('--n_neurons', type=int, help='number of neurons in fully connected layer')    
+    parser.add_argument('--l2_lambda', type=float, help='l2 regularization lambda')
 
+    args, _ = parser.parse_known_args()
     train(args)
 
