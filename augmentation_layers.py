@@ -52,7 +52,7 @@ class RandomFreqMask(PreprocessingLayer):
         batch_size = self.batch_size
         freq_max = tf.shape(input)[2]
 
-        param = self.percentage * freq_max
+        param = int(self.percentage * freq_max)
 
         # input = tf.convert_to_tensor(input)
         f = tf.random.uniform(shape=(), minval=0, maxval=param, dtype=tf.dtypes.int32)
@@ -116,7 +116,7 @@ class RandomTimeMask(PreprocessingLayer):
         batch_size = self.batch_size
         time_max = tf.shape(input)[1]
 
-        param = self.percentage * time_max
+        param = int(self.percentage * time_max)
 
         # input = tf.convert_to_tensor(input)
         t = tf.random.uniform(shape=(), minval=0, maxval=param, dtype=tf.dtypes.int32)
