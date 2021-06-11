@@ -72,12 +72,25 @@ def train(args):
 
     wav_paths = glob(f'{args.src_root}/**', recursive=True)
     wav_paths = [x.replace(os.sep, '/') for x in wav_paths if '.wav' in x]
+
     classes = sorted(os.listdir(args.src_root))
     le = LabelEncoder()
     le.fit(classes)
+
     labels = [os.path.split(x)[0].split('/')[-1] for x in wav_paths]
     labels = le.transform(labels)
-    wav_train, wav_val, label_train, label_val = train_test_split(wav_paths, labels, test_size=0.1, random_state=0)
+
+    if args.val_root:
+        wav_val = glob(f'{args.val_root}/**', recursive=True)
+        wav_val = [x.replace(os.sep, '/') for x in wav_val if '.wav' in x]
+
+        label_val = [os.path.split(x)[0].split('/')[-1] for x in wav_val]
+        label_val = le.transform(label_val)
+
+        wav_train, label_train = wav_paths, labels
+
+    else:
+        wav_train, wav_val, label_train, label_val = train_test_split(wav_paths, labels, test_size=0.1, random_state=0)
 
     assert len(label_train) >= args.batch_size, 'Number of train samples must be >= batch_size'
     if len(set(label_train)) != n_classes:
@@ -112,6 +125,7 @@ def train(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Audio Classification Training')
     parser.add_argument('--src_root', type=str, default='clean', help='directory of audio files in total duration')
+    parser.add_argument('--val_root', type=str, default=None, help='directory of audio files used for val')
     parser.add_argument('--output_root', type=str, default='runs', help='directory to store output model files and logs')
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs to do')
     parser.add_argument('--dt', type=float, default=1.0, help='time in seconds to sample audio')

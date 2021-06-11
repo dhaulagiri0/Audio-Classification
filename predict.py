@@ -28,6 +28,7 @@ def predict_test(args):
     wav_paths = sorted([x.replace(os.sep, '/') for x in wav_paths if '.wav' in x])
     preds = []
     file_names = []
+    pred_mean = []
 
     for z, wav_fn in tqdm(enumerate(wav_paths), total=len(wav_paths)):
         rate, wav = downsample_mono(wav_fn, args.sr)
@@ -56,9 +57,13 @@ def predict_test(args):
         print('File: {} Predicted class: {}'.format(file_name, pred))
         preds.append(pred)
         file_names.append(file_name)
+        pred_mean.append(y_mean)
 
     df = pd.DataFrame({'a':file_names, 'b':preds})
     df.to_csv(os.path.join('preds', args.pred_fn + '.csv'), index=False, header=False)
+
+    df = pd.DataFrame({'a':file_names, 'b':pred_mean})
+    df.to_csv(os.path.join('preds', args.pred_fn + '_mean.csv'), index=False, header=False)
 
 def make_prediction(args):
 
