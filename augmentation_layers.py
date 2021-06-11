@@ -24,6 +24,7 @@ class RandomFreqMask(PreprocessingLayer):
   def __init__(self,
                batch_size,
                percentage=0.1,
+               thresh=0.5,
                seed=None,
                **kwargs):
     super(RandomFreqMask, self).__init__(**kwargs)
@@ -31,12 +32,16 @@ class RandomFreqMask(PreprocessingLayer):
     self.seed = seed
     self.percentage = percentage
     self.batch_size = batch_size
+    self.thresh = thresh
     self._rng = make_generator(self.seed)
     self.input_spec = InputSpec(ndim=4)
 
   def call(self, inputs, training=True):
     if training is None:
       training = backend.learning_phase()
+
+    if self._rng.uniform(shape=()) > self.thresh:
+      return inputs  
 
     def freq_mask_vect():
         """
@@ -50,7 +55,7 @@ class RandomFreqMask(PreprocessingLayer):
         """
         input = inputs
         batch_size = self.batch_size
-        freq_max = tf.shape(input)[2]
+        freq_max = input.shape[2]
 
         param = int(self.percentage * freq_max)
 
@@ -59,7 +64,7 @@ class RandomFreqMask(PreprocessingLayer):
         f0 = tf.random.uniform(
             shape=(batch_size, 1, 1, 1), minval=0, maxval=freq_max - f, dtype=tf.dtypes.int32
         )
-        indices = tf.reshape(tf.concat([tf.range(freq_max)] * batch_size, axis=-1), (batch_size, -1, 1, 1))
+        indices = tf.reshape(tf.concat([tf.range(freq_max)] * batch_size, axis=-1), (batch_size, 1, -1, 1))
         condition = tf.math.logical_and(
             tf.math.greater_equal(indices, f0), tf.math.less(indices, f0 + f)
         )
@@ -78,9 +83,10 @@ class RandomFreqMask(PreprocessingLayer):
     config = {
         'batch_size': self.batch_size,
         'seed': self.seed,
-        'percentage': self.percentage
+        'percentage': self.percentage,
+        'thresh': self.thresh
     }
-    base_config = super(RandomFreqMask, self).get_config()
+    base_config = super().get_config()
     return dict(list(base_config.items()) + list(config.items()))
 
 class RandomTimeMask(PreprocessingLayer):
@@ -88,6 +94,7 @@ class RandomTimeMask(PreprocessingLayer):
   def __init__(self,
                batch_size,
                percentage=0.1,
+               thresh=0.5,
                seed=None,
                **kwargs):
     super(RandomTimeMask, self).__init__(**kwargs)
@@ -95,12 +102,16 @@ class RandomTimeMask(PreprocessingLayer):
     self.seed = seed
     self.batch_size = batch_size
     self.percentage = percentage
+    self.thresh = thresh
     self._rng = make_generator(self.seed)
     self.input_spec = InputSpec(ndim=4)
 
   def call(self, inputs, training=True):
     if training is None:
       training = backend.learning_phase()
+
+    if self._rng.uniform(shape=()) > self.thresh:
+        return inputs  
 
     def time_mask_vect():
         """
@@ -114,7 +125,7 @@ class RandomTimeMask(PreprocessingLayer):
         """
         input = inputs
         batch_size = self.batch_size
-        time_max = tf.shape(input)[1]
+        time_max = input.shape[1]
 
         param = int(self.percentage * time_max)
 
@@ -142,7 +153,8 @@ class RandomTimeMask(PreprocessingLayer):
     config = {
         'batch_size': self.batch_size,
         'seed': self.seed,
-        'percentage': self.percentage
+        'percentage': self.percentage,
+        'thresh': self.thresh
     }
-    base_config = super(RandomFreqMask, self).get_config()
+    base_config = super().get_config()
     return dict(list(base_config.items()) + list(config.items()))

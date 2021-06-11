@@ -5,6 +5,7 @@ import argparse
 import warnings
 import os
 import datetime
+import pdb
 
 from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau, EarlyStopping
 from tensorflow.keras.utils import to_categorical
@@ -30,7 +31,6 @@ class DataGenerator(tf.keras.utils.Sequence):
 
     def __len__(self):
         return int(np.floor(len(self.wav_paths) / self.batch_size))
-
 
     def __getitem__(self, index):
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
@@ -68,7 +68,7 @@ def train(args):
         hp.HParam('l2_lambda'): args.l2_lambda
     }
     n_classes = len(os.listdir(args.src_root))
-    model = ConvDense(n_classes, args.sr, args.dt, args.n_mels, args.spectrogram_width, args.spectrogram_height, args.n_fft, args.dropout_1, args.dropout_2, args.n_neurons, args.l2_lambda)
+    model = ConvDense(n_classes, args.sr, args.dt, args.n_mels, args.spectrogram_width, args.spectrogram_height, args.n_fft, args.dropout_1, args.dropout_2, args.n_neurons, args.l2_lambda, args.batch_size)
 
     wav_paths = glob(f'{args.src_root}/**', recursive=True)
     wav_paths = [x.replace(os.sep, '/') for x in wav_paths if '.wav' in x]
@@ -102,8 +102,8 @@ def train(args):
             metrics=[hp.Metric('epoch_accuracy')]
         )
     hparams_cb = hp.KerasCallback(writer=hparams_dir, hparams=hparams)
-    reduce_lr = ReduceLROnPlateau(monitor='val_accuracy', factor=0.1, patience=5, verbose=1)
-    early_stopping = EarlyStopping(monitor='val_accuracy', patience=10, verbose=1)
+    reduce_lr = ReduceLROnPlateau(monitor='val_accuracy', factor=0.3, patience=5, verbose=1)
+    early_stopping = EarlyStopping(monitor='val_accuracy', patience=30, verbose=1)
 
     model.fit(tg, validation_data=vg,
               epochs=args.epochs, verbose=1,
@@ -117,7 +117,7 @@ if __name__ == '__main__':
     parser.add_argument('--dt', type=float, default=1.0, help='time in seconds to sample audio')
     parser.add_argument('--sr', type=int, default=22050, help='sample rate of clean audio')
     # hyperparameters to try
-    parser.add_argument('--batch_size', type=int, default=16, help='batch size')
+    parser.add_argument('--batch_size', type=int, default=15, help='batch size')
     parser.add_argument('--n_mels', type=int, default=128, help='number of melspectrograms')
     parser.add_argument('--spectrogram_width', type=int, default=250, help='width of resized melspectrogram')
     parser.add_argument('--spectrogram_height', type=int, default=128, help='height of resized melspectrogram')
