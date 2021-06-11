@@ -3,6 +3,7 @@ from tensorflow.keras.models import load_model
 from clean import downsample_mono, envelope
 from kapre.time_frequency import STFT, Magnitude, ApplyFilterbank, MagnitudeToDecibel
 from sklearn.preprocessing import LabelEncoder
+from augmentation_layers import RandomFreqMask, RandomTimeMask
 import numpy as np
 from glob import glob
 import argparse
@@ -19,7 +20,9 @@ def predict_test(args):
                     'Magnitude':Magnitude,
                     'ApplyFilterbank':ApplyFilterbank,
                     'tf': tf,
-                    'MagnitudeToDecibel':MagnitudeToDecibel})
+                    'MagnitudeToDecibel':MagnitudeToDecibel,
+                    'RandomTimeMask': RandomTimeMask,
+                    'RandomFreqMask': RandomFreqMask})
 
     wav_paths = glob('{}/**'.format(args.src_dir), recursive=True)
     wav_paths = sorted([x.replace(os.sep, '/') for x in wav_paths if '.wav' in x])
@@ -55,7 +58,7 @@ def predict_test(args):
         file_names.append(file_name)
 
     df = pd.DataFrame({'a':file_names, 'b':preds})
-    df.to_csv(os.path.join('logs', args.pred_fn + '.csv'), index=False, header=False)
+    df.to_csv(os.path.join('preds', args.pred_fn + '.csv'), index=False, header=False)
 
 def make_prediction(args):
 
@@ -63,7 +66,9 @@ def make_prediction(args):
         custom_objects={'STFT':STFT,
                         'Magnitude':Magnitude,
                         'ApplyFilterbank':ApplyFilterbank,
-                        'MagnitudeToDecibel':MagnitudeToDecibel})
+                        'MagnitudeToDecibel':MagnitudeToDecibel,
+                        'RandomTimeMask': RandomTimeMask,
+                        'RandomFreqMask': RandomFreqMask})
     wav_paths = glob('{}/**'.format(args.src_dir), recursive=True)
     wav_paths = sorted([x.replace(os.sep, '/') for x in wav_paths if '.wav' in x])
     classes = sorted(os.listdir(args.src_dir))
