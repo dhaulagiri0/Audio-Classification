@@ -5,7 +5,7 @@ from tensorflow.keras.regularizers import l2
 from kapre.composed import get_melspectrogram_layer
 from augmentation_layers import RandomFreqMask, RandomTimeMask
 import tensorflow as tf
-from perceiver import Perceiver
+from tensorflow.keras.models import Sequential
 
 def norm_fn(x):
     x = tf.cast(x, tf.float32)
@@ -14,10 +14,13 @@ def norm_fn(x):
     # return 2 * (x - mins) / (maxes - mins) - 1
     return x
 
-def Perceiver(n_classes=10, sr=16000, dt=1.0, n_mels=128, spectrogram_width=250, spectrogram_height=128, n_fft=2048, dropout_1=0.2, dropout_2=0.2, n_neurons=1024, l2_lambda=0.001, batch_size=15, **kwargs):
+def mish(inputs):
+    return inputs * tf.math.tanh(tf.math.softplus(inputs))
+
+def TriMelspecModel(n_classes=10, sr=16000, dt=1.0, backbone='densenet201', n_mels=128, spectrogram_width=250, n_fft=2048, dropout_1=0.2, dropout_2=0.2, dropout_3=0.15, dropout_4=0.1, dense_1=1024, dense_2=512, dense_3=256, l2_lambda=0.001, learning_rate=0.001, batch_size=15, mask_pct=0.2, mask_thresh=0.3, activation='relu', **kwargs):
     input_shape = (int(sr*dt), 1)
     input_layer = layers.Input(input_shape)
-    normalized_input = layers.Lambda(norm_fn)(input_layer)
+    # normalized_input = layers.Lambda(norm_fn)(input_layer)
     i1 = get_melspectrogram_layer(input_shape=input_shape,
                                  n_mels=n_mels,
                                  pad_end=True,
@@ -28,13 +31,11 @@ def Perceiver(n_classes=10, sr=16000, dt=1.0, n_mels=128, spectrogram_width=250,
                                  return_decibel=True,
                                  input_data_format='channels_last',
                                  output_data_format='channels_last',
-                                 name='mel1')(normalized_input)
-
+                                 name='mel1')(input_layer)
     i1 = LayerNormalization(axis=2)(i1)
-    i1_aug = RandomTimeMask(batch_size, 0.2, 0.3)(i1)
-    i1_aug = RandomFreqMask(batch_size, 0.2, 0.3)(i1_aug) 
-
-    spec1 = layers.experimental.preprocessing.Resizing(spectrogram_width, spectrogram_height)(i1_aug)
+    i1_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i1)
+    i1_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i1_aug) 
+    spec1 = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i1_aug)
     
     i2 = get_melspectrogram_layer(input_shape=input_shape,
                                 n_mels=n_mels,
@@ -46,13 +47,11 @@ def Perceiver(n_classes=10, sr=16000, dt=1.0, n_mels=128, spectrogram_width=250,
                                 return_decibel=True,
                                 input_data_format='channels_last',
                                 output_data_format='channels_last',
-                                name='mel2')(normalized_input)
-
+                                name='mel2')(input_layer)
     i2 = LayerNormalization(axis=2)(i2)
-    i2_aug = RandomTimeMask(batch_size, 0.2, 0.3)(i2)
-    i2_aug = RandomFreqMask(batch_size, 0.2, 0.3)(i2_aug) 
-
-    spec2 = layers.experimental.preprocessing.Resizing(spectrogram_width, spectrogram_height)(i2_aug)
+    i2_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i2)
+    i2_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i2_aug) 
+    spec2 = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i2_aug)
 
     i3 = get_melspectrogram_layer(input_shape=input_shape,
                                 n_mels=n_mels,
@@ -64,127 +63,52 @@ def Perceiver(n_classes=10, sr=16000, dt=1.0, n_mels=128, spectrogram_width=250,
                                 return_decibel=True,
                                 input_data_format='channels_last',
                                 output_data_format='channels_last',
-                                name='mel3')(normalized_input)
-
+                                name='mel3')(input_layer)
     i3 = LayerNormalization(axis=2)(i3)
-    i3_aug = RandomTimeMask(batch_size, 0.2, 0.3)(i3)
-    i3_aug = RandomFreqMask(batch_size, 0.2, 0.3)(i3_aug) 
-
-    spec3 = layers.experimental.preprocessing.Resizing(spectrogram_width, spectrogram_height)(i3_aug)
+    i3_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i3)
+    i3_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i3_aug) 
+    spec3 = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i3_aug)
 
     x = layers.concatenate([spec1, spec2, spec3])
 
-    # densenet = tf.keras.applications.DenseNet201(
-    #     include_top=False, weights='imagenet', input_shape=(spectrogram_width, spectrogram_height, 3), pooling=None
-    # )
+    if backbone == 'densenet201':
+        bb = tf.keras.applications.DenseNet201(
+            include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None
+        )
+    if backbone == 'resnet152':
+        bb = tf.keras.applications.ResNet152(
+            include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None
+        )
+    if backbone == 'densenet169':
+        bb = tf.keras.applications.DenseNet169(
+            include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None
+        )
+    if backbone == 'densenet121':
+        bb = tf.keras.applications.DenseNet121(
+            include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None
+        )
 
-    perceiver = Perceiver(
-        input_channels = 3,          # number of channels for each token of the input
-        input_axis = 2,              # number of axis for input data (2 for images, 3 for video)
-        num_freq_bands = 6,          # number of freq bands, with original value (2 * K + 1)
-        max_freq = 10.,              # maximum frequency, hyperparameter depending on how fine the data is
-        depth = 6,                   # depth of net
-        num_latents = 256,           # number of latents
-        latent_dim = 512,            # latent dimension
-        cross_heads = 1,             # number of heads for cross attention. paper said 1
-        latent_heads = 8,            # number of heads for latent self attention, 8
-        cross_dim_head = 64,
-        latent_dim_head = 64,
-        num_classes = n_classes,          # output number of classes
-        attn_dropout = 0.,
-        ff_dropout = 0.,
-    )
-
-    perceiverout = perceiver(x)
-    # x = layers.GlobalAveragePooling2D(name='avgpool')(perceiverout)
-    # x = layers.Dropout(rate=dropout_1, name='dropout1')(x)
-    # x = layers.Dense(n_neurons, activation='relu', activity_regularizer=l2(l2_lambda), name='dense')(x)
-    # x = layers.Dropout(rate=dropout_2, name='dropout2')(x)
-    # o = layers.Dense(n_classes, activation='softmax', name='softmax')(x)
-
-    model = Model(inputs=input_layer, outputs=perceiverout, name='perceiver')
-    model.compile(optimizer='adam',
-                  loss='categorical_crossentropy',
-                  metrics=['accuracy'])
-    model.summary()
-    return model
-
-def ConvDense(n_classes=10, sr=16000, dt=1.0, n_mels=128, spectrogram_width=250, spectrogram_height=128, n_fft=2048, dropout_1=0.2, dropout_2=0.2, n_neurons=1024, l2_lambda=0.001, batch_size=15, **kwargs):
-    input_shape = (int(sr*dt), 1)
-    input_layer = layers.Input(input_shape)
-    normalized_input = layers.Lambda(norm_fn)(input_layer)
-    i1 = get_melspectrogram_layer(input_shape=input_shape,
-                                 n_mels=n_mels,
-                                 pad_end=True,
-                                 n_fft=n_fft,
-                                 win_length=int(25 * sr / 1000),
-                                 hop_length=int(10 * sr / 1000),
-                                 sample_rate=sr,
-                                 return_decibel=True,
-                                 input_data_format='channels_last',
-                                 output_data_format='channels_last',
-                                 name='mel1')(normalized_input)
-
-    i1 = LayerNormalization(axis=2)(i1)
-    i1_aug = RandomTimeMask(batch_size, 0.2, 0.3)(i1)
-    i1_aug = RandomFreqMask(batch_size, 0.2, 0.3)(i1_aug) 
-
-    spec1 = layers.experimental.preprocessing.Resizing(spectrogram_width, spectrogram_height)(i1_aug)
-    
-    i2 = get_melspectrogram_layer(input_shape=input_shape,
-                                n_mels=n_mels,
-                                pad_end=True,
-                                n_fft=n_fft,
-                                win_length=int(50 * sr / 1000),
-                                hop_length=int(25 * sr / 1000),
-                                sample_rate=sr,
-                                return_decibel=True,
-                                input_data_format='channels_last',
-                                output_data_format='channels_last',
-                                name='mel2')(normalized_input)
-
-    i2 = LayerNormalization(axis=2)(i2)
-    i2_aug = RandomTimeMask(batch_size, 0.2, 0.3)(i2)
-    i2_aug = RandomFreqMask(batch_size, 0.2, 0.3)(i2_aug) 
-
-    spec2 = layers.experimental.preprocessing.Resizing(spectrogram_width, spectrogram_height)(i2_aug)
-
-    i3 = get_melspectrogram_layer(input_shape=input_shape,
-                                n_mels=n_mels,
-                                pad_end=True,
-                                n_fft=n_fft,
-                                win_length=int(100 * sr / 1000),
-                                hop_length=int(50 * sr / 1000),
-                                sample_rate=sr,
-                                return_decibel=True,
-                                input_data_format='channels_last',
-                                output_data_format='channels_last',
-                                name='mel3')(normalized_input)
-
-    i3 = LayerNormalization(axis=2)(i3)
-    i3_aug = RandomTimeMask(batch_size, 0.2, 0.3)(i3)
-    i3_aug = RandomFreqMask(batch_size, 0.2, 0.3)(i3_aug) 
-
-    spec3 = layers.experimental.preprocessing.Resizing(spectrogram_width, spectrogram_height)(i3_aug)
-
-    x = layers.concatenate([spec1, spec2, spec3])
-
-    densenet = tf.keras.applications.DenseNet201(
-        include_top=False, weights='imagenet', input_shape=(spectrogram_width, spectrogram_height, 3), pooling=None
-    )
-
-    denseout = densenet(x)
-    x = layers.GlobalAveragePooling2D(name='avgpool')(denseout)
-    x = layers.Dropout(rate=dropout_1, name='dropout1')(x)
-    x = layers.Dense(n_neurons, activation='relu', activity_regularizer=l2(l2_lambda), name='dense')(x)
-    x = layers.Dropout(rate=dropout_2, name='dropout2')(x)
+    bb_out = bb(x)
+    x = layers.GlobalAveragePooling2D(name='avgpool')(bb_out)
+    x = layers.Dropout(rate=dropout_1, name='dropout_1')(x)
+    if activation == 'mish':
+        x = layers.Dense(dense_1, activation=mish, activity_regularizer=l2(l2_lambda), name='dense_1')(x)
+    else:
+        x = layers.Dense(dense_1, activation=activation, activity_regularizer=l2(l2_lambda), name='dense_1')(x)
+    x = layers.Dropout(rate=dropout_2, name='dropout_2')(x)
+    if activation == 'mish':
+        x = layers.Dense(dense_2, activation=mish, activity_regularizer=l2(l2_lambda), name='dense_2')(x)
+    else:
+        x = layers.Dense(dense_2, activation=activation, activity_regularizer=l2(l2_lambda), name='dense_12')(x)
+    x = layers.Dropout(rate=dropout_3, name='dropout_3')(x)
+    # x = layers.Dense(dense_3, activation=mish, activity_regularizer=l2(l2_lambda), name='dense_3')(x)
+    # x = layers.Dropout(rate=dropout_4, name='dropout_4')(x)
     o = layers.Dense(n_classes, activation='softmax', name='softmax')(x)
 
-    model = Model(inputs=input_layer, outputs=o, name='densenet')
-    model.compile(optimizer='adam',
+    model = Model(inputs=input_layer, outputs=o, name='model')
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
                   loss='categorical_crossentropy',
                   metrics=['accuracy'])
-    model.summary()
     return model
 
 

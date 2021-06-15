@@ -5,3 +5,4 @@ runs/
 preds/
 *.zip
 *.pkl
+ray_results/
