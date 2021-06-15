@@ -87,6 +87,10 @@ def TriMelspecModel(n_classes=10, sr=16000, dt=1.0, backbone='densenet201', n_me
         bb = tf.keras.applications.DenseNet121(
             include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None
         )
+    if backbone == 'efficientnetb7':
+        bb = tf.keras.applications.EfficientNetB7(
+            include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None
+        )
 
     bb_out = bb(x)
     x = layers.GlobalAveragePooling2D(name='avgpool')(bb_out)
@@ -96,11 +100,11 @@ def TriMelspecModel(n_classes=10, sr=16000, dt=1.0, backbone='densenet201', n_me
     else:
         x = layers.Dense(dense_1, activation=activation, activity_regularizer=l2(l2_lambda), name='dense_1')(x)
     x = layers.Dropout(rate=dropout_2, name='dropout_2')(x)
-    if activation == 'mish':
-        x = layers.Dense(dense_2, activation=mish, activity_regularizer=l2(l2_lambda), name='dense_2')(x)
-    else:
-        x = layers.Dense(dense_2, activation=activation, activity_regularizer=l2(l2_lambda), name='dense_12')(x)
-    x = layers.Dropout(rate=dropout_3, name='dropout_3')(x)
+    # if activation == 'mish':
+        # x = layers.Dense(dense_2, activation=mish, activity_regularizer=l2(l2_lambda), name='dense_2')(x)
+    # else:
+        # x = layers.Dense(dense_2, activation=activation, activity_regularizer=l2(l2_lambda), name='dense_12')(x)
+    # x = layers.Dropout(rate=dropout_3, name='dropout_3')(x)
     # x = layers.Dense(dense_3, activation=mish, activity_regularizer=l2(l2_lambda), name='dense_3')(x)
     # x = layers.Dropout(rate=dropout_4, name='dropout_4')(x)
     o = layers.Dense(n_classes, activation='softmax', name='softmax')(x)
