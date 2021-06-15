@@ -6,6 +6,7 @@ from kapre.composed import get_melspectrogram_layer
 from augmentation_layers import RandomFreqMask, RandomTimeMask
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
+import tensorflow_hub as hub
 
 def norm_fn(x):
     x = tf.cast(x, tf.float32)
@@ -91,6 +92,8 @@ def TriMelspecModel(n_classes=10, sr=16000, dt=1.0, backbone='densenet201', n_me
         bb = tf.keras.applications.EfficientNetB7(
             include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None
         )
+    if backbone == 'efficientnetv2-l':
+        bb = hub.KerasLayer('gs://cloud-tpu-checkpoints/efficientnet/v2/hub/efficientnetv2-l/feature-vector', trainable=True)
 
     bb_out = bb(x)
     x = layers.GlobalAveragePooling2D(name='avgpool')(bb_out)
