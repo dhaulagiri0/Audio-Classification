@@ -63,7 +63,9 @@ def train(args):
         hp.HParam('n_fft'): args.n_fft,
         hp.HParam('dropout_1'): args.dropout_1,
         hp.HParam('dropout_2'): args.dropout_2,
+        hp.HParam('dropout_3'): args.dropout_3,
         hp.HParam('dense_1'): args.dense_1,
+        hp.HParam('dense_2'): args.dense_2,
         hp.HParam('l2_lambda'): args.l2_lambda,
         hp.HParam('mask_pct'): args.mask_pct,
         hp.HParam('mask_thresh'): args.mask_thresh,
@@ -83,10 +85,10 @@ def train(args):
         n_fft=args.n_fft,
         dropout_1=args.dropout_1,
         dropout_2=args.dropout_2,
-        # dropout_3=args['dropout_3'],
+        dropout_3=args.dropout_3,
         # dropout_4=args['dropout_4'],
         dense_1=args.dense_1,
-        # dense_2=args['dense_2'],
+        dense_2=args.dense_2,
         # dense_3=args['dense_3'],
         l2_lambda=args.l2_lambda,
         learning_rate=args.learning_rate,
@@ -164,7 +166,9 @@ if __name__ == '__main__':
     parser.add_argument('--n_fft', type=int, help='number of fast fourier transform frequencies to analyze')
     parser.add_argument('--dropout_1', type=float, help='dropout rate between densenet and FCL')
     parser.add_argument('--dropout_2', type=float, help='dropout rate between FCL and last layer')
-    parser.add_argument('--dense_1', type=int, help='number of neurons in fully connected layer')    
+    parser.add_argument('--dropout_3', type=float)
+    parser.add_argument('--dense_1', type=int, help='number of neurons in fully connected layer')  
+    parser.add_argument('--dense_2', type=int)  
     parser.add_argument('--l2_lambda', type=float, help='l2 regularization lambda')
     parser.add_argument('--mask_pct', type=float)
     parser.add_argument('--mask_thresh', type=float)
