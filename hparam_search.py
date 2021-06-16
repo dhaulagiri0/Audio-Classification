@@ -71,10 +71,10 @@ def train_sc(config):
         dropout_1=config['dropout_1'],
         dropout_2=config['dropout_2'],
         dropout_3=config['dropout_3'],
-        # dropout_4=config['dropout_4'],
+        dropout_4=config['dropout_4'],
         dense_1=config['dense_1'],
         dense_2=config['dense_2'],
-        # dense_3=config['dense_3'],
+        dense_3=config['dense_3'],
         l2_lambda=config['l2_lambda'],
         learning_rate=config['learning_rate'],
         batch_size=config['batch_size'],
@@ -112,21 +112,12 @@ def train_sc(config):
 
     tg = DataGenerator(wav_train, label_train, config['sr'], config['dt'], n_classes, batch_size=config['batch_size'])
     vg = DataGenerator(wav_val, label_val, config['sr'], config['dt'], n_classes, batch_size=config['batch_size'])
-    # runtime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     cp_best_val_acc = ModelCheckpoint(os.path.join(ray.tune.get_trial_dir(), 'best_val_acc.h5'), monitor='val_accuracy',
                          save_best_only=True, save_weights_only=False,
                          mode='auto', save_freq='epoch', verbose=1)
     cp_best_val_loss = ModelCheckpoint(os.path.join(ray.tune.get_trial_dir(), 'best_val_loss.h5'), monitor='val_loss',
                          save_best_only=True, save_weights_only=False,
                          mode='auto', save_freq='epoch', verbose=1)
-    # tb = TensorBoard(os.path.join(args.output_root, runtime, 'logs'), histogram_freq=1)
-    # hparams_dir = os.path.join(args.output_root, runtime, 'logs', 'validation')
-    # with tf.summary.create_file_writer(hparams_dir).as_default():
-        # hp.hparams_config(
-            # hparams=hparams,
-            # metrics=[hp.Metric('epoch_accuracy')]
-        # )
-    # hparams_cb = hp.KerasCallback(writer=hparams_dir, hparams=hparams)
     reduce_lr = ReduceLROnPlateau(monitor='val_accuracy', factor=0.3, patience=5, verbose=1)
 
     print(ray.tune.get_trial_dir())
@@ -137,11 +128,11 @@ def train_sc(config):
                   'accuracy': 'accuracy',
                   'val_accuracy': 'val_accuracy'
               }), cp_best_val_acc, cp_best_val_loss])
-
+    
 def tune_sc(args):
     analysis = tune.run(
         train_sc,
-        name='sc_expt_2dense_full',
+        name=args.expt_name,
         scheduler=AsyncHyperBandScheduler(time_attr='training_iteration', metric='val_accuracy', mode='max', max_t=40, grace_period=15),
         search_alg=HEBOSearch(metric='val_accuracy', mode='max', max_concurrent=1),
         stop={
@@ -149,7 +140,7 @@ def tune_sc(args):
         },
         num_samples=args.num_samples,
         resources_per_trial={
-            'cpu': 4,
+            'cpu': 2,
             'gpu': 1
         },
         keep_checkpoints_num=1,
@@ -170,16 +161,16 @@ def tune_sc(args):
             'dropout_1': tune.quniform(0.1, 0.4, 0.1),
             'dropout_2': tune.quniform(0.1, 0.4, 0.1),
             'dropout_3': tune.quniform(0.1, 0.5, 0.1),
-            # 'dropout_4': tune.quniform(0.1, 0.5, 0.1),
+            'dropout_4': tune.quniform(0.1, 0.5, 0.1),
             'dense_1': tune.choice([512, 1024, 2048]),
             'dense_2': tune.choice([512, 1024, 2048]),
-            # 'dense_3': tune.choice([512, 1024, 2048]),
+            'dense_3': tune.choice([512, 1024, 2048]),
             'l2_lambda': tune.loguniform(1e-6, 1e-3),
             'mask_pct': tune.quniform(0.1, 0.4, 0.1),
             'mask_thresh': tune.uniform(0.1, 0.7),
             'learning_rate': tune.uniform(1e-4, 5e-3),
             'activation': tune.choice(['mish', 'tanh', 'relu', 'sigmoid']),
-            'backbone': tune.choice(['densenet169', 'densenet121', 'resnet152'])
+            'backbone': tune.choice(['densenet169', 'densenet121', 'resnet152', 'efficientnetb7', 'efficientnetv2-l'])
         }
     )
     print('Best hyperparameters found were: ', analysis.best_config)
@@ -195,5 +186,6 @@ if __name__ == '__main__':
     parser.add_argument('--num_training_iterations', type=int)
     parser.add_argument('--num_samples', type=int)
     parser.add_argument('--restore_root', type=str)
+    parser.add_argument('--expt_name', type=str)
     args, _ = parser.parse_known_args()
     tune_sc(args)
