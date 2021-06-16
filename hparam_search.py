@@ -120,8 +120,6 @@ def train_sc(config):
                          mode='auto', save_freq='epoch', verbose=1)
     reduce_lr = ReduceLROnPlateau(monitor='val_accuracy', factor=0.3, patience=5, verbose=1)
 
-    print(ray.tune.get_trial_dir())
-
     model.fit(tg, validation_data=vg,
               epochs=config['epochs'], verbose=1,
               callbacks=[reduce_lr, TuneReportCallback({
@@ -185,7 +183,6 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=26, help='batch size')
     parser.add_argument('--num_training_iterations', type=int)
     parser.add_argument('--num_samples', type=int)
-    parser.add_argument('--restore_root', type=str)
     parser.add_argument('--expt_name', type=str)
     args, _ = parser.parse_known_args()
     tune_sc(args)
