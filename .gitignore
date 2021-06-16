@@ -6,4 +6,4 @@ preds/
 *.zip
 *.pkl
 ray_results/
-*.sh
+scripts/
