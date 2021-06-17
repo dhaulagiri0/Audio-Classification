@@ -98,6 +98,9 @@ def train(args):
         activation=args.activation
     )
 
+    if args.weights:
+      model.load_weights(args.weights)
+
     wav_paths = glob(f'{args.src_root}/**', recursive=True)
     wav_paths = [x.replace(os.sep, '/') for x in wav_paths if '.wav' in x]
 
@@ -127,7 +130,7 @@ def train(args):
         warnings.warn(f"Found {len(set(label_val))}/{n_classes} classes in validation data. Increase data size or change random_state.")
 
     tg = DataGenerator(wav_train, label_train, args.sr, args.dt, n_classes, batch_size=args.batch_size)
-    vg = DataGenerator(wav_val, label_val, args.sr, args.dt, n_classes, batch_size=args.batch_size)
+    vg = DataGenerator(wav_val, label_val, args.sr, args.dt, n_classes, batch_size=15)
     runtime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     cp_best_val_acc = ModelCheckpoint(os.path.join(args.output_root, runtime, 'best_val_acc.h5'), monitor='val_accuracy',
                          save_best_only=True, save_weights_only=False,
@@ -148,7 +151,7 @@ def train(args):
 
     model.fit(tg, validation_data=vg,
               epochs=args.epochs, verbose=1,
-              callbacks=[cp_best_val_acc, cp_best_val_loss, tb, hparams_cb, reduce_lr, early_stopping])
+              callbacks=[cp_best_val_acc, cp_best_val_loss, tb, hparams_cb, reduce_lr, early_stopping], validation_batch_size=15)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Audio Classification Training')
@@ -174,6 +177,7 @@ if __name__ == '__main__':
     parser.add_argument('--mask_thresh', type=float)
     parser.add_argument('--learning_rate', type=float)
     parser.add_argument('--activation', type=str)
+    parser.add_argument('--weights', default=None, help='path of the model weights to resume from', type=str)
 
     args, _ = parser.parse_known_args()
     train(args)
