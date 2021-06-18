@@ -50,7 +50,7 @@ def EnsembleModel(
 
     x = layers.Add()(output_list)
     x = layers.Dense(128, activation='relu', activity_regularizer=l2(l2_lambda), name='dense1')(x)
-    o = layers.Dense(n_classes, activation='relu', activity_regularizer=l2(l2_lambda), name='logits')(x)
+    o = layers.Dense(n_classes, activation='softmax', activity_regularizer=l2(l2_lambda), name='logits')(x)
 
     model = Model(inputs=input_layer, outputs=o, name='ensemble_model')
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
