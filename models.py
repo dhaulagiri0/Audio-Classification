@@ -3,7 +3,9 @@ from tensorflow.keras.layers import TimeDistributed, LayerNormalization
 from tensorflow.keras.models import Model
 from tensorflow.keras.regularizers import l2
 from kapre.composed import get_melspectrogram_layer
+from kapre.time_frequency import STFT, Magnitude, ApplyFilterbank, MagnitudeToDecibel
 from augmentation_layers import RandomFreqMask, RandomTimeMask
+from tensorflow.keras.models import load_model
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 import tensorflow_hub as hub
@@ -16,6 +18,42 @@ def norm_fn(x):
 
 def mish(inputs):
     return inputs * tf.math.tanh(tf.math.softplus(inputs))
+
+def EnsembleModel(
+    model_paths, 
+    n_classes=13, 
+    sr=22050, 
+    dt=1.0,         
+    l2_lambda=0.001, 
+    learning_rate=0.001):
+
+    input_shape = (int(sr*dt), 1)
+    input_layer = layers.Input(input_shape)
+    output_list = []
+    for path in model_paths:
+
+        model = load_model(path,
+        custom_objects={'STFT':STFT,
+                        'Magnitude':Magnitude,
+                        'ApplyFilterbank':ApplyFilterbank,
+                        'MagnitudeToDecibel':MagnitudeToDecibel,
+                        'RandomTimeMask': RandomTimeMask,
+                        'RandomFreqMask': RandomFreqMask,
+                        'KerasLayer': hub.KerasLayer('gs://cloud-tpu-checkpoints/efficientnet/v2/hub/efficientnetv2-l/feature-vector', trainable=True)})
+        
+        output_list.append(model(input_layer))
+
+    x = layers.Add()(output_list)
+    x = layers.Dense(128, activation='relu', activity_regularizer=l2(l2_lambda), name='dense1')(x)
+    x = layers.Dense(128, activation='relu', activity_regularizer=l2(l2_lambda), name='dense1')(x)
+    o = layers.Dense(n_classes, activation='relu', activity_regularizer=l2(l2_lambda), name='logits')(x)
+
+    model = Model(inputs=input_layer, outputs=o, name='ensemble_model')
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+    model.summary()
+    return model
 
 def TriMelspecModel(
     n_classes=13, 

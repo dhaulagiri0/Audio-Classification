@@ -25,7 +25,6 @@ def predict_test(args):
         custom_objects={'STFT':STFT,
                         'Magnitude':Magnitude,
                         'ApplyFilterbank':ApplyFilterbank,
-                        'tf': tf,
                         'MagnitudeToDecibel':MagnitudeToDecibel,
                         'RandomTimeMask': RandomTimeMask,
                         'RandomFreqMask': RandomFreqMask})

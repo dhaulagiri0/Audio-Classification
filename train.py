@@ -12,7 +12,7 @@ from tensorflow.keras.utils import to_categorical
 from scipy.io import wavfile
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
-from models import TriMelspecModel
+from models import TriMelspecModel, EnsembleModel
 from glob import glob
 from tensorboard.plugins.hparams import api as hp
 
@@ -75,31 +75,40 @@ def train(args):
     }
     n_classes = len(os.listdir(args.src_root))
 
-    model = TriMelspecModel(
-        n_classes=n_classes,
-        sr=args.sr,
-        dt=args.dt,
-        backbone=args.backbone,
-        n_mels=args.n_mels,
-        spectrogram_width=args.spectrogram_width,
-        n_fft=args.n_fft,
-        dropout_1=args.dropout_1,
-        dropout_2=args.dropout_2,
-        dropout_3=args.dropout_3,
-        # dropout_4=args['dropout_4'],
-        dense_1=args.dense_1,
-        dense_2=args.dense_2,
-        # dense_3=args['dense_3'],
-        l2_lambda=args.l2_lambda,
-        learning_rate=args.learning_rate,
-        batch_size=args.batch_size,
-        mask_pct=args.mask_pct,
-        mask_thresh=args.mask_thresh,
-        activation=args.activation
-    )
+    if not args.ensemble:
+        model = TriMelspecModel(
+            n_classes=n_classes,
+            sr=args.sr,
+            dt=args.dt,
+            backbone=args.backbone,
+            n_mels=args.n_mels,
+            spectrogram_width=args.spectrogram_width,
+            n_fft=args.n_fft,
+            dropout_1=args.dropout_1,
+            dropout_2=args.dropout_2,
+            dropout_3=args.dropout_3,
+            # dropout_4=args['dropout_4'],
+            dense_1=args.dense_1,
+            dense_2=args.dense_2,
+            # dense_3=args['dense_3'],
+            l2_lambda=args.l2_lambda,
+            learning_rate=args.learning_rate,
+            batch_size=args.batch_size,
+            mask_pct=args.mask_pct,
+            mask_thresh=args.mask_thresh,
+            activation=args.activation
+        )
 
-    if args.weights:
-      model.load_weights(args.weights)
+        if args.weights:
+            model.load_weights(args.weights)
+    else:
+        model = EnsembleModel(
+            ensemble_paths=args.ensemble_paths,
+            n_classes=n_classes,            
+            sr=args.sr,
+            dt=args.dt,           
+            l2_lambda=args.l2_lambda,
+            learning_rate=args.learning_rate,)
 
     wav_paths = glob(f'{args.src_root}/**', recursive=True)
     wav_paths = [x.replace(os.sep, '/') for x in wav_paths if '.wav' in x]
@@ -146,7 +155,7 @@ def train(args):
             metrics=[hp.Metric('epoch_accuracy')]
         )
     hparams_cb = hp.KerasCallback(writer=hparams_dir, hparams=hparams)
-    reduce_lr = ReduceLROnPlateau(monitor='val_accuracy', factor=0.3, patience=5, verbose=1)
+    reduce_lr = ReduceLROnPlateau(monitor='val_accuracy', factor=0.3, patience=3, verbose=1)
     early_stopping = EarlyStopping(monitor='val_accuracy', patience=30, verbose=1)
 
     model.fit(tg, validation_data=vg,
@@ -178,6 +187,8 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', type=float)
     parser.add_argument('--activation', type=str)
     parser.add_argument('--weights', default=None, help='path of the model weights to resume from', type=str)
+    parser.add_argument('--ensemble', default=False, action='store_true')
+    parser.add_argument('--ensemble_paths', nargs='+')
 
     args, _ = parser.parse_known_args()
     train(args)
