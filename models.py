@@ -26,7 +26,11 @@ def EnsembleModel(
     dt=1.0,         
     l2_lambda=0.001, 
     learning_rate=0.001,
-    fine_tune=False):
+    dropout_1=0.2,
+    dropout_2=0.2,
+    stem_dense=128,
+    head_dense=1024,
+    activation='relu'):
 
     input_shape = (int(sr*dt), 1)
     input_layer = layers.Input(input_shape)
@@ -46,10 +50,12 @@ def EnsembleModel(
         model.trainable = False
         model_out = model.layers[-2].output
         new_model = Model(model.input, model_out)
-        output_list.append(layers.Dense(128, activation='relu')(new_model(input_layer)))
+        output_list.append(layers.Dense(stem_dense, activation=activation)(new_model(input_layer)))
 
     x = layers.Add()(output_list)
-    x = layers.Dense(128, activation='relu', activity_regularizer=l2(l2_lambda), name='dense1')(x)
+    x = layers.Dropout(dropout_1)(x)
+    x = layers.Dense(head_dense, activation=activation, activity_regularizer=l2(l2_lambda), name='head_dense')(x)
+    x = layers.Dropout(dropout_2)(x)
     o = layers.Dense(n_classes, activation='softmax', activity_regularizer=l2(l2_lambda), name='logits')(x)
 
     model = Model(inputs=input_layer, outputs=o, name='ensemble_model')
