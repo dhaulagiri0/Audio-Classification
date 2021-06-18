@@ -17,7 +17,7 @@ from tensorflow.keras.utils import to_categorical
 from scipy.io import wavfile
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
-from models import TriMelspecModel
+from models import EnsembleModel
 from glob import glob
 
 class DataGenerator(tf.keras.utils.Sequence):
@@ -60,26 +60,17 @@ class DataGenerator(tf.keras.utils.Sequence):
 def train_sc(config):
     n_classes = len(os.listdir(config['src_root']))
    
-    model = TriMelspecModel(
+    model = EnsembleModel(
         n_classes=n_classes,
         sr=config['sr'],
         dt=config['dt'],
-        backbone=config['backbone'],
-        n_mels=config['n_mels'],
-        spectrogram_width=config['spectrogram_width'],
-        n_fft=config['n_fft'],
         dropout_1=config['dropout_1'],
         dropout_2=config['dropout_2'],
-        dropout_3=config['dropout_3'],
-        dropout_4=config['dropout_4'],
-        dense_1=config['dense_1'],
-        dense_2=config['dense_2'],
-        dense_3=config['dense_3'],
+        stem_dense=config['stem_dense'],
+        head_dense=config['head_dense'],
         l2_lambda=config['l2_lambda'],
         learning_rate=config['learning_rate'],
         batch_size=config['batch_size'],
-        mask_pct=config['mask_pct'],
-        mask_thresh=config['mask_thresh'],
         activation=config['activation']
     )
 
@@ -118,7 +109,7 @@ def train_sc(config):
     cp_best_val_loss = ModelCheckpoint(os.path.join(ray.tune.get_trial_dir(), 'best_val_loss.h5'), monitor='val_loss',
                          save_best_only=True, save_weights_only=False,
                          mode='auto', save_freq='epoch', verbose=1)
-    reduce_lr = ReduceLROnPlateau(monitor='val_accuracy', factor=0.3, patience=5, verbose=1)
+    reduce_lr = ReduceLROnPlateau(monitor='val_accuracy', factor=0.3, patience=3, verbose=1)
 
     model.fit(tg, validation_data=vg,
               epochs=config['epochs'], verbose=1,
@@ -153,22 +144,13 @@ def tune_sc(args):
             'sr': 22050,
             'epochs': args.epochs,
             'batch_size': args.batch_size,
-            'spectrogram_width': tune.choice([250, 375, 500]),
-            'n_mels': tune.choice([128, 256]),
-            'n_fft': tune.choice([2048, 4096]),
             'dropout_1': tune.quniform(0.1, 0.4, 0.1),
             'dropout_2': tune.quniform(0.1, 0.4, 0.1),
-            'dropout_3': tune.quniform(0.1, 0.5, 0.1),
-            'dropout_4': tune.quniform(0.1, 0.5, 0.1),
-            'dense_1': tune.choice([512, 1024, 2048]),
-            'dense_2': tune.choice([512, 1024, 2048]),
-            'dense_3': tune.choice([512, 1024, 2048]),
+            'stem_dense': tune.choice([128, 256, 512]),
+            'head_dense': tune.choice([256, 512, 1024]),
             'l2_lambda': tune.loguniform(1e-6, 1e-3),
-            'mask_pct': tune.quniform(0.1, 0.4, 0.1),
-            'mask_thresh': tune.uniform(0.1, 0.7),
             'learning_rate': tune.uniform(1e-4, 5e-3),
             'activation': tune.choice(['mish', 'tanh', 'relu', 'sigmoid']),
-            'backbone': tune.choice(['densenet169', 'densenet121', 'resnet152', 'efficientnetb7', 'efficientnetv2-l'])
         }
     )
     print('Best hyperparameters found were: ', analysis.best_config)
