@@ -44,12 +44,12 @@ def EnsembleModel(
                         'KerasLayer': KerasLayer})
         model._name = f'model{i}'
         model.trainable = False
-
-        output_list.append(model(input_layer))
+        model_out = model.layers[-2].output
+        new_model = Model(model.input, model_out)
+        output_list.append(layers.Dense(128, activation='relu')(new_model(input_layer)))
 
     x = layers.Add()(output_list)
     x = layers.Dense(128, activation='relu', activity_regularizer=l2(l2_lambda), name='dense1')(x)
-    x = layers.Dense(128, activation='relu', activity_regularizer=l2(l2_lambda), name='dense2')(x)
     o = layers.Dense(n_classes, activation='relu', activity_regularizer=l2(l2_lambda), name='logits')(x)
 
     model = Model(inputs=input_layer, outputs=o, name='ensemble_model')
