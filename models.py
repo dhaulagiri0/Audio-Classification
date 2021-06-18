@@ -107,11 +107,21 @@ def TriMelspecModel(
     if backbone == 'efficientnetv2-l':
         bb = hub.KerasLayer('gs://cloud-tpu-checkpoints/efficientnet/v2/hub/efficientnetv2-l/feature-vector', trainable=True)
 
-    x = bb(x)
-
-    if not backbone == 'efficientnetv2-l':
-        # efficientnetv2-l does not need globalaveragepooling as they already do the flatten for us
-        x = layers.GlobalAveragePooling2D(name='avgpool')(x)
+    if backbone == 'efficientnet-gru':
+        bb = tf.keras.applications.EfficientNetB7(include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None)
+        bb = layers.Reshape((-1, bb.output_shape[-1]))(bb(x))
+        bb = layers.Bidirectional(layers.GRU(256, return_sequences=True))(bb)
+        x = layers.Bidirectional(layers.GRU(256))(bb)
+    elif backbone == 'densenet-gru':
+        bb = tf.keras.applications.DenseNet201(include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None)
+        bb = layers.Reshape((-1, bb.output_shape[-1]))(bb(x))
+        bb = layers.GRU(256, return_sequences=True)(bb)
+        x = layers.GRU(256)(bb)
+    else:
+        x = bb(x)
+        if not backbone == 'efficientnetv2-l':
+            # efficientnetv2-l does not need globalaveragepooling as they already do the flatten for us
+            x = layers.GlobalAveragePooling2D(name='avgpool')(x)
 
     if dropout_1 > 0:
         x = layers.Dropout(rate=dropout_1, name='dropout_1')(x)
