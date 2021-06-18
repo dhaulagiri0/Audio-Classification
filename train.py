@@ -108,7 +108,12 @@ def train(args):
             sr=args.sr,
             dt=args.dt,           
             l2_lambda=args.l2_lambda,
-            learning_rate=args.learning_rate,)
+            learning_rate=args.learning_rate,
+            dropout_1=args.dropout_1,
+            dropout_2=args.dropout_2,
+            stem_dense=args.stem_dense,
+            head_dense=args.head_dense,
+            activation=args.activation)
 
     wav_paths = glob(f'{args.src_root}/**', recursive=True)
     wav_paths = [x.replace(os.sep, '/') for x in wav_paths if '.wav' in x]
@@ -140,7 +145,7 @@ def train(args):
 
     tg = DataGenerator(wav_train, label_train, args.sr, args.dt, n_classes, batch_size=args.batch_size)
     vg = DataGenerator(wav_val, label_val, args.sr, args.dt, n_classes, batch_size=15)
-    runtime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    runtime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + '_' + args.run_name
     cp_best_val_acc = ModelCheckpoint(os.path.join(args.output_root, runtime, 'best_val_acc.h5'), monitor='val_accuracy',
                          save_best_only=True, save_weights_only=False,
                          mode='auto', save_freq='epoch', verbose=1)
@@ -176,22 +181,24 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs to do')
     parser.add_argument('--dt', type=float, default=1.0, help='time in seconds to sample audio')
     parser.add_argument('--sr', type=int, default=22050, help='sample rate of clean audio')
-    # hyperparameters to try
+    parser.add_argument('--run_name', type=str, default='')
     parser.add_argument('--backbone', type=str)
     parser.add_argument('--batch_size', type=int, default=26, help='batch size')
     parser.add_argument('--n_mels', type=int, default=128, help='number of melspectrograms')
     parser.add_argument('--spectrogram_width', type=int, default=250, help='width of resized melspectrogram')
-    parser.add_argument('--n_fft', type=int, help='number of fast fourier transform frequencies to analyze')
-    parser.add_argument('--dropout_1', type=float, help='dropout rate between densenet and FCL')
-    parser.add_argument('--dropout_2', type=float, help='dropout rate between FCL and last layer')
-    parser.add_argument('--dropout_3', type=float)
-    parser.add_argument('--dense_1', type=int, help='number of neurons in fully connected layer')  
-    parser.add_argument('--dense_2', type=int)  
-    parser.add_argument('--l2_lambda', type=float, help='l2 regularization lambda')
-    parser.add_argument('--mask_pct', type=float)
-    parser.add_argument('--mask_thresh', type=float)
-    parser.add_argument('--learning_rate', type=float)
-    parser.add_argument('--activation', type=str)
+    parser.add_argument('--n_fft', type=int, default=2048, help='number of fast fourier transform frequencies to analyze')
+    parser.add_argument('--dropout_1', type=float, default=0.2, help='dropout rate between densenet and FCL')
+    parser.add_argument('--dropout_2', type=float, default=0.2, help='dropout rate between FCL and last layer')
+    parser.add_argument('--dropout_3', type=float, default=0.2)
+    parser.add_argument('--dense_1', type=int, default=1024, help='number of neurons in fully connected layer')  
+    parser.add_argument('--dense_2', type=int, default=1024)  
+    parser.add_argument('--stem_dense', type=int, default=128)
+    parser.add_argument('--head_dense', type=int, default=128)
+    parser.add_argument('--l2_lambda', type=float, default=0.001, help='l2 regularization lambda')
+    parser.add_argument('--mask_pct', type=float, default=0.2)
+    parser.add_argument('--mask_thresh', type=float, default=0.3)
+    parser.add_argument('--learning_rate', type=float, default=3e-4)
+    parser.add_argument('--activation', type=str, default='relu')
     parser.add_argument('--weights', default=None, help='path of the model weights to resume from', type=str)
     parser.add_argument('--ensemble', default=False, action='store_true')
     parser.add_argument('--ensemble_paths', action='append')
