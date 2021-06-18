@@ -25,7 +25,8 @@ def EnsembleModel(
     sr=22050, 
     dt=1.0,         
     l2_lambda=0.001, 
-    learning_rate=0.001):
+    learning_rate=0.001,
+    fine_tune=False):
 
     input_shape = (int(sr*dt), 1)
     input_layer = layers.Input(input_shape)
@@ -39,7 +40,7 @@ def EnsembleModel(
                         'MagnitudeToDecibel':MagnitudeToDecibel,
                         'RandomTimeMask': RandomTimeMask,
                         'RandomFreqMask': RandomFreqMask,
-                        'KerasLayer': hub.KerasLayer('gs://cloud-tpu-checkpoints/efficientnet/v2/hub/efficientnetv2-l/feature-vector', trainable=True)})
+                        'KerasLayer': hub.KerasLayer('gs://cloud-tpu-checkpoints/efficientnet/v2/hub/efficientnetv2-l/feature-vector', trainable=fine_tune)})
         
         output_list.append(model(input_layer))
 
