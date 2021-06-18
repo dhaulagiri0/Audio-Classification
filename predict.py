@@ -11,23 +11,32 @@ import argparse
 import os
 import pandas as pd
 from tqdm import tqdm
-from models import TriMelspecModel
-
+from models import TriMelspecModel, mish, EnsembleModel
+import tensorflow_hub as hub
 
 # custom predict function to predict test data
 def predict_test(args):
     # load model
-    if args.efficientnet:
-        model = TriMelspecModel(n_classes=13, sr=22050, dt=1.0, backbone='efficientnetv2-l', n_mels=128, spectrogram_width=250, n_fft=2048, dropout_1=0.2, dropout_2=0.2, dense_1=1024, l2_lambda=0.001, learning_rate=3e-4, batch_size=26, mask_pct=0.2, mask_thresh=0.3, activation='relu')
-        model.load_weights(args.model_fn)
+    if args.ensemble:
+      model = EnsembleModel(
+              model_paths=args.ensemble_paths,
+              n_classes=13,            
+              sr=args.sr,
+              dt=args.dt,           
+              l2_lambda=0.0001,
+              learning_rate=1e-4,)
+      model.load_weights(args.model_fn)
     else:
-        model = load_model(args.model_fn,
-        custom_objects={'STFT':STFT,
-                        'Magnitude':Magnitude,
-                        'ApplyFilterbank':ApplyFilterbank,
-                        'MagnitudeToDecibel':MagnitudeToDecibel,
-                        'RandomTimeMask': RandomTimeMask,
-                        'RandomFreqMask': RandomFreqMask})
+      KerasLayer = hub.KerasLayer('gs://cloud-tpu-checkpoints/efficientnet/v2/hub/efficientnetv2-l/feature-vector', trainable=True)
+      model = load_model(args.model_fn,
+      custom_objects={'STFT':STFT,
+                      'Magnitude':Magnitude,
+                      'ApplyFilterbank':ApplyFilterbank,
+                      'MagnitudeToDecibel':MagnitudeToDecibel,
+                      'RandomTimeMask': RandomTimeMask,
+                      'RandomFreqMask': RandomFreqMask,
+                      'mish':mish,
+                      'KerasLayer': KerasLayer})
 
     wav_paths = glob('{}/**'.format(args.src_dir), recursive=True)
     wav_paths = sorted([x.replace(os.sep, '/') for x in wav_paths if '.wav' in x])
@@ -79,6 +88,8 @@ if __name__ == '__main__':
     parser.add_argument('--sr', type=int, default=16000, help='sample rate of clean audio')
     parser.add_argument('--threshold', type=str, default=20, help='threshold magnitude for np.int16 dtype')
     parser.add_argument('--efficientnet', type=bool)
+    parser.add_argument('--ensemble', default=False, action='store_true')
+    parser.add_argument('--ensemble_paths', action='append')
     args, _ = parser.parse_known_args()
 
     predict_test(args)
