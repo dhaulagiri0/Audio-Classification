@@ -57,25 +57,25 @@ class DataGenerator(tf.keras.utils.Sequence):
 
 
 def train(args):
-    hparams = {
-        hp.HParam('n_mels'): args.n_mels,
-        hp.HParam('spectrogram_width'): args.spectrogram_width,
-        hp.HParam('n_fft'): args.n_fft,
-        hp.HParam('dropout_1'): args.dropout_1,
-        hp.HParam('dropout_2'): args.dropout_2,
-        hp.HParam('dropout_3'): args.dropout_3,
-        hp.HParam('dense_1'): args.dense_1,
-        hp.HParam('dense_2'): args.dense_2,
-        hp.HParam('l2_lambda'): args.l2_lambda,
-        hp.HParam('mask_pct'): args.mask_pct,
-        hp.HParam('mask_thresh'): args.mask_thresh,
-        hp.HParam('learning_rate'): args.learning_rate,
-        hp.HParam('activation'): args.activation,
-        hp.HParam('backbone'): args.backbone
-    }
     n_classes = len(os.listdir(args.src_root))
 
     if not args.ensemble:
+        hparams = {
+            hp.HParam('n_mels'): args.n_mels,
+            hp.HParam('spectrogram_width'): args.spectrogram_width,
+            hp.HParam('n_fft'): args.n_fft,
+            hp.HParam('dropout_1'): args.dropout_1,
+            hp.HParam('dropout_2'): args.dropout_2,
+            hp.HParam('dropout_3'): args.dropout_3,
+            hp.HParam('dense_1'): args.dense_1,
+            hp.HParam('dense_2'): args.dense_2,
+            hp.HParam('l2_lambda'): args.l2_lambda,
+            hp.HParam('mask_pct'): args.mask_pct,
+            hp.HParam('mask_thresh'): args.mask_thresh,
+            hp.HParam('learning_rate'): args.learning_rate,
+            hp.HParam('activation'): args.activation,
+            hp.HParam('backbone'): args.backbone
+        }
         model = TriMelspecModel(
             n_classes=n_classes,
             sr=args.sr,
@@ -103,7 +103,7 @@ def train(args):
             model.load_weights(args.weights)
     else:
         model = EnsembleModel(
-            ensemble_paths=args.ensemble_paths,
+            model_paths=args.ensemble_paths,
             n_classes=n_classes,            
             sr=args.sr,
             dt=args.dt,           
@@ -148,19 +148,25 @@ def train(args):
                          save_best_only=True, save_weights_only=False,
                          mode='auto', save_freq='epoch', verbose=1)
     tb = TensorBoard(os.path.join(args.output_root, runtime, 'logs'), histogram_freq=1)
-    hparams_dir = os.path.join(args.output_root, runtime, 'logs', 'validation')
-    with tf.summary.create_file_writer(hparams_dir).as_default():
-        hp.hparams_config(
-            hparams=hparams,
-            metrics=[hp.Metric('epoch_accuracy')]
-        )
-    hparams_cb = hp.KerasCallback(writer=hparams_dir, hparams=hparams)
+    if not args.ensemble:
+      hparams_dir = os.path.join(args.output_root, runtime, 'logs', 'validation')
+      with tf.summary.create_file_writer(hparams_dir).as_default():
+          hp.hparams_config(
+              hparams=hparams,
+              metrics=[hp.Metric('epoch_accuracy')]
+          )
+      hparams_cb = hp.KerasCallback(writer=hparams_dir, hparams=hparams)
     reduce_lr = ReduceLROnPlateau(monitor='val_accuracy', factor=0.3, patience=3, verbose=1)
     early_stopping = EarlyStopping(monitor='val_accuracy', patience=30, verbose=1)
 
-    model.fit(tg, validation_data=vg,
-              epochs=args.epochs, verbose=1,
-              callbacks=[cp_best_val_acc, cp_best_val_loss, tb, hparams_cb, reduce_lr, early_stopping], validation_batch_size=15)
+    if not args.ensemble:
+      model.fit(tg, validation_data=vg,
+                epochs=args.epochs, verbose=1,
+                callbacks=[cp_best_val_acc, cp_best_val_loss, tb, hparams_cb, reduce_lr, early_stopping], validation_batch_size=15)
+    else:
+      model.fit(tg, validation_data=vg,
+                epochs=args.epochs, verbose=1,
+                callbacks=[cp_best_val_acc, cp_best_val_loss, tb, reduce_lr, early_stopping], validation_batch_size=15)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Audio Classification Training')
@@ -188,7 +194,7 @@ if __name__ == '__main__':
     parser.add_argument('--activation', type=str)
     parser.add_argument('--weights', default=None, help='path of the model weights to resume from', type=str)
     parser.add_argument('--ensemble', default=False, action='store_true')
-    parser.add_argument('--ensemble_paths', nargs='+')
+    parser.add_argument('--ensemble_paths', action='append')
 
     args, _ = parser.parse_known_args()
     train(args)

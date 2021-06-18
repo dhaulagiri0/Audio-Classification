@@ -31,8 +31,8 @@ def EnsembleModel(
     input_shape = (int(sr*dt), 1)
     input_layer = layers.Input(input_shape)
     output_list = []
-    for path in model_paths:
-
+    KerasLayer = hub.KerasLayer('gs://cloud-tpu-checkpoints/efficientnet/v2/hub/efficientnetv2-l/feature-vector', trainable=True)
+    for i, path in enumerate(model_paths):
         model = load_model(path,
         custom_objects={'STFT':STFT,
                         'Magnitude':Magnitude,
@@ -40,13 +40,16 @@ def EnsembleModel(
                         'MagnitudeToDecibel':MagnitudeToDecibel,
                         'RandomTimeMask': RandomTimeMask,
                         'RandomFreqMask': RandomFreqMask,
-                        'KerasLayer': hub.KerasLayer('gs://cloud-tpu-checkpoints/efficientnet/v2/hub/efficientnetv2-l/feature-vector', trainable=fine_tune)})
-        
+                        'mish':mish,
+                        'KerasLayer': KerasLayer})
+        model._name = f'model{i}'
+        model.trainable = False
+
         output_list.append(model(input_layer))
 
     x = layers.Add()(output_list)
     x = layers.Dense(128, activation='relu', activity_regularizer=l2(l2_lambda), name='dense1')(x)
-    x = layers.Dense(128, activation='relu', activity_regularizer=l2(l2_lambda), name='dense1')(x)
+    x = layers.Dense(128, activation='relu', activity_regularizer=l2(l2_lambda), name='dense2')(x)
     o = layers.Dense(n_classes, activation='relu', activity_regularizer=l2(l2_lambda), name='logits')(x)
 
     model = Model(inputs=input_layer, outputs=o, name='ensemble_model')
