@@ -463,16 +463,16 @@ def SingleMelspecUpscaleModel(
     
 
 def ConvPreWavBlock(x, outchannels):
-    x = layers.Conv1D(outchannels, (3, 3), 1, .appending='same', use_bias=False, activation='relu')(x)
+    x = layers.Conv1D(outchannels, (3, 3), 1, padding='same', use_bias=False, activation='relu')(x)
     x = layers.BatchNormalization()(x)
-    x = layers.Conv1D(outchannels, (3, 3), 1, .appending='same', dilation_rate=2, use_bias=False, activation='relu')(x)
+    x = layers.Conv1D(outchannels, (3, 3), 1, padding='same', dilation_rate=2, use_bias=False, activation='relu')(x)
     x = layers.BatchNormalization()(x)
     x = layers.MaxPool1D(strides=4)(x)
     return x
 
 def ConvBlock(x, outchannels, pool_size, pool_type):
-    x = layers.Conv2D(outchannels, (3, 3), 1, .appending='same', use_bias=False, activation='relu')(x)
-    x = layers.Conv2D(outchannels, (3, 3), 1, .appending='same', use_bias=False, activation='relu')(x)
+    x = layers.Conv2D(outchannels, (3, 3), 1, padding='same', use_bias=False, activation='relu')(x)
+    x = layers.Conv2D(outchannels, (3, 3), 1, padding='same', use_bias=False, activation='relu')(x)
     if pool_type == 'max':
         x = layers.MaxPool2D(pool_size)(x)
     else:
@@ -558,7 +558,7 @@ def WavegramCNN(
 
 
     # wavegram head
-    x = layers.Conv1D(64, 11, 5, .appending='same', use_bias=False, activation='relu')(input_layer)
+    x = layers.Conv1D(64, 11, 5, padding='same', use_bias=False, activation='relu')(input_layer)
     x = layers.BatchNormalization()(x)
     # conv block
     x = ConvPreWavBlock(x, 64)
