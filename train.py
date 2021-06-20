@@ -12,9 +12,8 @@ from tensorflow.keras.utils import to_categorical
 from scipy.io import wavfile
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
-from models import TriMelspecModel, EnsembleModel, WavegramCNN
+from models import TriMelspecModel, EnsembleModel, TriSpecModel, WavegramCNN
 from glob import glob
-from tensorboard.plugins.hparams import api as hp
 
 class DataGenerator(tf.keras.utils.Sequence):
     def __init__(self, wav_paths, labels, sr, dt, n_classes,
@@ -25,7 +24,7 @@ class DataGenerator(tf.keras.utils.Sequence):
         self.dt = dt
         self.n_classes = n_classes
         self.batch_size = batch_size
-        self.shuffle = True
+        self.shuffle = shuffle
         self.on_epoch_end()
 
 
@@ -59,24 +58,21 @@ class DataGenerator(tf.keras.utils.Sequence):
 def train(args):
     n_classes = len(os.listdir(args.src_root))
 
-    if not args.ensemble:
-        hparams = {
-            hp.HParam('n_mels'): args.n_mels,
-            hp.HParam('spectrogram_width'): args.spectrogram_width,
-            hp.HParam('n_fft'): args.n_fft,
-            hp.HParam('dropout_1'): args.dropout_1,
-            hp.HParam('dropout_2'): args.dropout_2,
-            hp.HParam('dropout_3'): args.dropout_3,
-            hp.HParam('dense_1'): args.dense_1,
-            hp.HParam('dense_2'): args.dense_2,
-            hp.HParam('l2_lambda'): args.l2_lambda,
-            hp.HParam('mask_pct'): args.mask_pct,
-            hp.HParam('mask_thresh'): args.mask_thresh,
-            hp.HParam('learning_rate'): args.learning_rate,
-            hp.HParam('activation'): args.activation,
-            hp.HParam('backbone'): args.backbone
-        }
-        if args.model_type == 'melspec':
+    if args.ensemble:
+        model = EnsembleModel(
+            model_paths=args.ensemble_paths,
+            n_classes=n_classes,            
+            sr=args.sr,
+            dt=args.dt,           
+            l2_lambda=args.l2_lambda,
+            learning_rate=args.learning_rate,
+            dropout_1=args.dropout_1,
+            dropout_2=args.dropout_2,
+            stem_dense=args.stem_dense,
+            head_dense=args.head_dense,
+            activation=args.activation)
+    else:
+        if args.model == 'trimelspec':
             model = TriMelspecModel(
                 n_classes=n_classes,
                 sr=args.sr,
@@ -88,16 +84,40 @@ def train(args):
                 dropout_1=args.dropout_1,
                 dropout_2=args.dropout_2,
                 dropout_3=args.dropout_3,
-                # dropout_4=args['dropout_4'],
+                dropout_4=args.dropout_4,
                 dense_1=args.dense_1,
                 dense_2=args.dense_2,
-                # dense_3=args['dense_3'],
+                dense_3=args.dense_3,
                 l2_lambda=args.l2_lambda,
                 learning_rate=args.learning_rate,
                 batch_size=args.batch_size,
                 mask_pct=args.mask_pct,
                 mask_thresh=args.mask_thresh,
                 activation=args.activation
+            )
+        elif args.model == 'trispec':
+            model = TriSpecModel(
+                n_classes=n_classes,
+                sr=args.sr,
+                dt=args.dt,
+                backbone=args.backbone,
+                spectrogram_width=args.spectrogram_width,
+                spectrogram_height=args.spectrogram_height,
+                n_fft=args.n_fft,
+                dropout_1=args.dropout_1,
+                dropout_2=args.dropout_2,
+                dropout_3=args.dropout_3,
+                dropout_4=args.dropout_4,
+                dense_1=args.dense_1,
+                dense_2=args.dense_2,
+                dense_3=args.dense_3,
+                l2_lambda=args.l2_lambda,
+                learning_rate=args.learning_rate,
+                batch_size=args.batch_size,
+                mask_pct=args.mask_pct,
+                mask_thresh=args.mask_thresh,
+                activation=args.activation,
+                return_decibel=args.return_decibel
             )
         else:
             model = WavegramCNN(
@@ -122,22 +142,9 @@ def train(args):
                 mask_thresh=args.mask_thresh,
                 activation=args.activation
             )
-            
+
         if args.weights:
-            model.load_weights(args.weights)
-    else:
-        model = EnsembleModel(
-            model_paths=args.ensemble_paths,
-            n_classes=n_classes,            
-            sr=args.sr,
-            dt=args.dt,           
-            l2_lambda=args.l2_lambda,
-            learning_rate=args.learning_rate,
-            dropout_1=args.dropout_1,
-            dropout_2=args.dropout_2,
-            stem_dense=args.stem_dense,
-            head_dense=args.head_dense,
-            activation=args.activation)
+            model.load_weights(args.weights)        
 
     wav_paths = glob(f'{args.src_root}/**', recursive=True)
     wav_paths = [x.replace(os.sep, '/') for x in wav_paths if '.wav' in x]
@@ -168,7 +175,7 @@ def train(args):
         warnings.warn(f"Found {len(set(label_val))}/{n_classes} classes in validation data. Increase data size or change random_state.")
 
     tg = DataGenerator(wav_train, label_train, args.sr, args.dt, n_classes, batch_size=args.batch_size)
-    vg = DataGenerator(wav_val, label_val, args.sr, args.dt, n_classes, batch_size=15)
+    vg = DataGenerator(wav_val, label_val, args.sr, args.dt, n_classes, batch_size=args.validation_batch_size)
     runtime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + '_' + args.run_name
     cp_best_val_acc = ModelCheckpoint(os.path.join(args.output_root, runtime, 'best_val_acc.h5'), monitor='val_accuracy',
                          save_best_only=True, save_weights_only=False,
@@ -177,47 +184,37 @@ def train(args):
                          save_best_only=True, save_weights_only=False,
                          mode='auto', save_freq='epoch', verbose=1)
     tb = TensorBoard(os.path.join(args.output_root, runtime, 'logs'), histogram_freq=1)
-    if not args.ensemble:
-      hparams_dir = os.path.join(args.output_root, runtime, 'logs', 'validation')
-      with tf.summary.create_file_writer(hparams_dir).as_default():
-          hp.hparams_config(
-              hparams=hparams,
-              metrics=[hp.Metric('epoch_accuracy')]
-          )
-      hparams_cb = hp.KerasCallback(writer=hparams_dir, hparams=hparams)
     reduce_lr = ReduceLROnPlateau(monitor='val_accuracy', factor=0.3, patience=3, verbose=1)
     early_stopping = EarlyStopping(monitor='val_accuracy', patience=30, verbose=1)
 
-    if not args.ensemble:
-      model.fit(tg, validation_data=vg,
-                epochs=args.epochs, verbose=1,
-                callbacks=[cp_best_val_acc, cp_best_val_loss, tb, hparams_cb, reduce_lr, early_stopping], validation_batch_size=15)
-    else:
-      model.fit(tg, validation_data=vg,
-                epochs=args.epochs, verbose=1,
-                callbacks=[cp_best_val_acc, cp_best_val_loss, tb, reduce_lr, early_stopping], validation_batch_size=15)
+    model.fit(tg, validation_data=vg,
+            epochs=args.epochs, verbose=1,
+            callbacks=[cp_best_val_acc, cp_best_val_loss, tb, reduce_lr, early_stopping], validation_batch_size=args.validation_batch_size)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Audio Classification Training')
-    parser.add_argument('--src_root', type=str, default='clean', help='directory of audio files in total duration')
-    parser.add_argument('--val_root', type=str, default=None, help='directory of audio files used for val')
+    parser.add_argument('--src_root', type=str, default='s1_train', help='directory of audio files used for train')
+    parser.add_argument('--val_root', type=str, default='s1_val', help='directory of audio files used for val')
     parser.add_argument('--output_root', type=str, default='runs', help='directory to store output model files and logs')
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs to do')
     parser.add_argument('--dt', type=float, default=1.0, help='time in seconds to sample audio')
     parser.add_argument('--sr', type=int, default=22050, help='sample rate of clean audio')
-    parser.add_argument('--run_name', type=str, default='')
+    parser.add_argument('--run_name', type=str, default='') 
+    parser.add_argument('--model', type=str, default='trimelspec')
     parser.add_argument('--backbone', type=str)
     parser.add_argument('--batch_size', type=int, default=26, help='batch size')
-    parser.add_argument('--n_mels', type=int, default=128, help='number of melspectrograms')
-    parser.add_argument('--spectrogram_width', type=int, default=250, help='width of resized melspectrogram')
+    parser.add_argument('--validation_batch_size', type=int, default=15)
+    parser.add_argument('--n_mels', type=int, default=128, help='number of melspec bins')
+    parser.add_argument('--spectrogram_width', type=int, default=250, help='width of resized spectrogram')
+    parser.add_argument('--spectrogram_height', type=int, default=512)
     parser.add_argument('--n_fft', type=int, default=2048, help='number of fast fourier transform frequencies to analyze')
-    parser.add_argument('--dropout_1', type=float, default=0.2, help='dropout rate between densenet and FCL')
-    parser.add_argument('--dropout_2', type=float, default=0.2, help='dropout rate between FCL and last layer')
-    parser.add_argument('--dropout_3', type=float, default=0.2)
+    parser.add_argument('--dropout_1', type=float, default=0.2)
+    parser.add_argument('--dropout_2', type=float, default=0.2)
+    parser.add_argument('--dropout_3', type=float, default=0.0)
+    parser.add_argument('--dropout_4', type=float, default=0.0)
     parser.add_argument('--dense_1', type=int, default=1024, help='number of neurons in fully connected layer')  
-    parser.add_argument('--dense_2', type=int, default=1024)  
-    parser.add_argument('--stem_dense', type=int, default=128)
-    parser.add_argument('--head_dense', type=int, default=128)
+    parser.add_argument('--dense_2', type=int, default=0)
+    parser.add_argument('--dense_3', type=int, default=0)
     parser.add_argument('--l2_lambda', type=float, default=0.001, help='l2 regularization lambda')
     parser.add_argument('--mask_pct', type=float, default=0.2)
     parser.add_argument('--mask_thresh', type=float, default=0.3)
@@ -226,7 +223,6 @@ if __name__ == '__main__':
     parser.add_argument('--weights', default=None, help='path of the model weights to resume from', type=str)
     parser.add_argument('--ensemble', default=False, action='store_true')
     parser.add_argument('--ensemble_paths', action='append')
-    parser.add_argument('--model_type', type=str, default='melspec')
-
+    parser.add_argument('--return_decibel', type=bool, default=True)
     args, _ = parser.parse_known_args()
     train(args)
