@@ -12,7 +12,7 @@ from tensorflow.keras.utils import to_categorical
 from scipy.io import wavfile
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
-from models import TriMelspecModel, EnsembleModel
+from models import TriMelspecModel, EnsembleModel, WavegramCNN
 from glob import glob
 from tensorboard.plugins.hparams import api as hp
 
@@ -76,29 +76,53 @@ def train(args):
             hp.HParam('activation'): args.activation,
             hp.HParam('backbone'): args.backbone
         }
-        model = TriMelspecModel(
-            n_classes=n_classes,
-            sr=args.sr,
-            dt=args.dt,
-            backbone=args.backbone,
-            n_mels=args.n_mels,
-            spectrogram_width=args.spectrogram_width,
-            n_fft=args.n_fft,
-            dropout_1=args.dropout_1,
-            dropout_2=args.dropout_2,
-            dropout_3=args.dropout_3,
-            # dropout_4=args['dropout_4'],
-            dense_1=args.dense_1,
-            dense_2=args.dense_2,
-            # dense_3=args['dense_3'],
-            l2_lambda=args.l2_lambda,
-            learning_rate=args.learning_rate,
-            batch_size=args.batch_size,
-            mask_pct=args.mask_pct,
-            mask_thresh=args.mask_thresh,
-            activation=args.activation
-        )
-
+        if args.model_type == 'melspec':
+            model = TriMelspecModel(
+                n_classes=n_classes,
+                sr=args.sr,
+                dt=args.dt,
+                backbone=args.backbone,
+                n_mels=args.n_mels,
+                spectrogram_width=args.spectrogram_width,
+                n_fft=args.n_fft,
+                dropout_1=args.dropout_1,
+                dropout_2=args.dropout_2,
+                dropout_3=args.dropout_3,
+                # dropout_4=args['dropout_4'],
+                dense_1=args.dense_1,
+                dense_2=args.dense_2,
+                # dense_3=args['dense_3'],
+                l2_lambda=args.l2_lambda,
+                learning_rate=args.learning_rate,
+                batch_size=args.batch_size,
+                mask_pct=args.mask_pct,
+                mask_thresh=args.mask_thresh,
+                activation=args.activation
+            )
+        else:
+            model = WavegramCNN(
+                n_classes=n_classes,
+                sr=args.sr,
+                dt=args.dt,
+                backbone=args.backbone,
+                n_mels=args.n_mels,
+                spectrogram_width=args.spectrogram_width,
+                n_fft=args.n_fft,
+                dropout_1=args.dropout_1,
+                dropout_2=args.dropout_2,
+                dropout_3=args.dropout_3,
+                # dropout_4=args['dropout_4'],
+                dense_1=args.dense_1,
+                dense_2=args.dense_2,
+                # dense_3=args['dense_3'],
+                l2_lambda=args.l2_lambda,
+                learning_rate=args.learning_rate,
+                batch_size=args.batch_size,
+                mask_pct=args.mask_pct,
+                mask_thresh=args.mask_thresh,
+                activation=args.activation
+            )
+            
         if args.weights:
             model.load_weights(args.weights)
     else:
@@ -202,6 +226,7 @@ if __name__ == '__main__':
     parser.add_argument('--weights', default=None, help='path of the model weights to resume from', type=str)
     parser.add_argument('--ensemble', default=False, action='store_true')
     parser.add_argument('--ensemble_paths', action='append')
+    parser.add_argument('--model_type', type=str, default='melspec')
 
     args, _ = parser.parse_known_args()
     train(args)
