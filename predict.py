@@ -14,11 +14,6 @@ from tqdm import tqdm
 from models import TriMelspecModel, mish, EnsembleModel
 import tensorflow_hub as hub
 
-from tensorflow.keras import mixed_precision
-
-policy = mixed_precision.Policy('mixed_float16')
-mixed_precision.set_global_policy(policy)
-
 # custom predict function to predict test data
 def predict_test(args):
     # load model

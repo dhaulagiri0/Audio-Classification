@@ -12,8 +12,6 @@ from tensorflow.keras.models import Sequential
 import tensorflow_hub as hub
 from tensorflow.keras import mixed_precision
 
-policy = mixed_precision.Policy('mixed_float16')
-mixed_precision.set_global_policy(policy)
 
 def norm_fn(x):
     x = tf.cast(x, tf.float32)
@@ -111,6 +109,9 @@ def EnsembleModel(
     dense_3=0,
     activation='relu'):
 
+    policy = mixed_precision.Policy('mixed_float16')
+    mixed_precision.set_global_policy(policy)
+
     input_shape = (int(sr*dt), 1)
     input_layer = layers.Input(input_shape)
     output_list = []
@@ -179,6 +180,9 @@ def TriMelspecModel(
                                 mask_pct=mask_pct, 
                                 mask_thresh=mask_thresh)
 
+    policy = mixed_precision.Policy('mixed_float16')
+    mixed_precision.set_global_policy(policy)
+
     if backbone == 'trigru':
         gru_outputs = []
         for melspec in melspec_head_outputs:
@@ -194,7 +198,6 @@ def TriMelspecModel(
 
         if backbone == 'densenet201':
             bb = tf.keras.applications.DenseNet201(include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None)
-            print(bb.dtype_policy)
         if backbone == 'resnet152':
             bb = tf.keras.applications.ResNet152(include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None)
         if backbone == 'densenet169':
@@ -222,9 +225,7 @@ def TriMelspecModel(
                 x = layers.GlobalAveragePooling2D(name='avgpool')(x)
 
     x = HeadModule(x, dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)
-    print(x.dtype_policy)
     o = layers.Dense(n_classes, activation='softmax', name='softmax')(x)
-    print(o.dtype_policy)
 
     model = Model(inputs=input_layer, outputs=o, name='model')
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
@@ -299,7 +300,8 @@ def TriSpecModel(
     i3_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i3)
     i3_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i3_aug) 
 
-
+    policy = mixed_precision.Policy('mixed_float16')
+    mixed_precision.set_global_policy(policy)
 
     if backbone == 'trigru':
         reshape1 = layers.Reshape((-1, int(n_fft/2+1)))(i1_aug)
@@ -400,6 +402,10 @@ def SingleMelspecUpscaleModel(
                                 input_data_format='channels_last',
                                 output_data_format='channels_last',
                                 name='mel1')(normalized_input)
+
+    policy = mixed_precision.Policy('mixed_float16')
+    mixed_precision.set_global_policy(policy)
+
     i1 = LayerNormalization(axis=2)(i1)
     i1_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i1)
     i1_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i1_aug) 
@@ -537,6 +543,9 @@ def WavegramCNN(
     i3_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i3)
     i3_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i3_aug) 
     spec3 = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i3_aug)
+
+    policy = mixed_precision.Policy('mixed_float16')
+    mixed_precision.set_global_policy(policy)
 
     x = layers.concatenate([spec1, spec2, spec3])
     logmel_out = ConvBlock(x, 64, (2, 2), pool_type='avg') 
