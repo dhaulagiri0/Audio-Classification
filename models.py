@@ -21,6 +21,7 @@ def mish(inputs):
     return inputs * tf.math.tanh(tf.math.softplus(inputs))
 
 def HeadModule(
+    input_tensor,
     dropout_1=0.2, 
     dropout_2=0.2, 
     dropout_3=0, 
@@ -31,39 +32,63 @@ def HeadModule(
     l2_lambda=0.001,
     activation='relu'):
 
-    seq = []
+    x = input_tensor
 
     if dropout_1 > 0:
-        seq.append(layers.Dropout(rate=dropout_1, name='dropout_1'))
+        x = layers.Dropout(rate=dropout_1, name='dropout_1_head')(x)
 
     if dense_1 > 0:
         if activation == 'mish':
-            seq.append(layers.Dense(dense_1, activation=mish, activity_regularizer=l2(l2_lambda), name='dense_1'))
+            x = layers.Dense(dense_1, activation=mish, activity_regularizer=l2(l2_lambda), name='dense_1_head')(x)
         else:
-            seq.append(layers.Dense(dense_1, activation=activation, activity_regularizer=l2(l2_lambda), name='dense_1'))
+            x = layers.Dense(dense_1, activation=activation, activity_regularizer=l2(l2_lambda), name='dense_1_head')(x)
 
     if dropout_2 > 0:
-        seq.append(layers.Dropout(rate=dropout_2, name='dropout_2'))
+        x = layers.Dropout(rate=dropout_2, name='dropout_2_head')(x)
 
     if dense_2 > 0:
         if activation == 'mish':
-            seq.append(layers.Dense(dense_2, activation=mish, activity_regularizer=l2(l2_lambda), name='dense_2'))
+            x = layers.Dense(dense_2, activation=mish, activity_regularizer=l2(l2_lambda), name='dense_2_head')(x)
         else:
-            seq.append(layers.Dense(dense_2, activation=activation, activity_regularizer=l2(l2_lambda), name='dense_2'))
+            x = layers.Dense(dense_2, activation=activation, activity_regularizer=l2(l2_lambda), name='dense_2_head')(x)
 
     if dropout_3 > 0:
-        seq.append(layers.Dropout(rate=dropout_3, name='dropout_3'))
+        x = layers.Dropout(rate=dropout_3, name='dropout_3_head')(x)
     
     if dense_3 > 0:
         if activation == 'mish':
-            seq.append(layers.Dense(dense_3, activation=mish, activity_regularizer=l2(l2_lambda), name='dense_3'))
+            x = layers.Dense(dense_3, activation=mish, activity_regularizer=l2(l2_lambda), name='dense_3_head')(x)
         else:
-            seq.append(layers.Dense(dense_3, activation=activation, activity_regularizer=l2(l2_lambda), name='dense_3'))
+            x = layers.Dense(dense_3, activation=activation, activity_regularizer=l2(l2_lambda), name='dense_3_head')(x)
     
     if dropout_4 > 0:
-        seq.append(layers.Dropout(rate=dropout_4, name='dropout_4'))
+        x = layers.Dropout(rate=dropout_4, name='dropout_4_head')(x)
 
-    return Sequential(seq)
+    return x
+
+def getMelSpecs(input_shape, input, n_fft=2048, sr=22050, spectrogram_width=250, n_mels=128, batch_size=26, mask_pct=0.3, mask_thresh=0.3):
+    melspec_head_outputs = []
+    win_lengths = [25, 50, 100]
+    hop_lengths = [10, 25, 50]
+    for i in range(3):
+        i = get_melspectrogram_layer(input_shape=input_shape,
+                            n_mels=n_mels,
+                            pad_end=True,
+                            n_fft=n_fft,
+                            win_length=int(win_lengths[i] * sr / 1000),
+                            hop_length=int(hop_lengths[i] * sr / 1000),
+                            sample_rate=sr,
+                            return_decibel=True,
+                            input_data_format='channels_last',
+                            output_data_format='channels_last',
+                            name=f'mel{i + 1}')(input)
+        i = LayerNormalization(axis=2)(i)
+        i_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i)
+        i_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i_aug) 
+        spec = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i_aug)
+        melspec_head_outputs.append(spec)
+
+    return melspec_head_outputs
 
 def EnsembleModel(
     model_paths, 
@@ -98,12 +123,10 @@ def EnsembleModel(
                         'KerasLayer': KerasLayer})
         model._name = f'model{i}'
         model.trainable = False
-        model_out = model.layers[-2].output
-        new_model = Model(model.input, model_out)
-        output_list.append(layers.Dense(connector_dense, activation=activation)(new_model(input_layer)))
+        output_list.append(layers.Dense(connector_dense, activation=activation)(model(input_layer)))
 
-    x = layers.append()(output_list)
-    x = HeadModule(dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)(x)
+    x = layers.concatenate(output_list)
+    x = HeadModule(x, dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)
 
     o = layers.Dense(n_classes, activation='softmax', activity_regularizer=l2(l2_lambda), name='logits')(x)
 
@@ -140,76 +163,79 @@ def TriMelspecModel(
     input_layer = layers.Input(input_shape)
 
     normalized_input = layers.Lambda(norm_fn)(input_layer)
-    
-    i1 = get_melspectrogram_layer(input_shape=input_shape,
-                                n_mels=n_mels,
-                                pad_end=True,
-                                n_fft=n_fft,
-                                win_length=int(25 * sr / 1000),
-                                hop_length=int(10 * sr / 1000),
-                                sample_rate=sr,
-                                return_decibel=True,
-                                input_data_format='channels_last',
-                                output_data_format='channels_last',
-                                name='mel1')(normalized_input)
-    i1 = LayerNormalization(axis=2)(i1)
-    i1_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i1)
-    i1_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i1_aug) 
-    spec1 = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i1_aug)
-    
-    i2 = get_melspectrogram_layer(input_shape=input_shape,
-                                n_mels=n_mels,
-                                pad_end=True,
-                                n_fft=n_fft,
-                                win_length=int(50 * sr / 1000),
-                                hop_length=int(25 * sr / 1000),
-                                sample_rate=sr,
-                                return_decibel=True,
-                                input_data_format='channels_last',
-                                output_data_format='channels_last',
-                                name='mel2')(normalized_input)
-    i2 = LayerNormalization(axis=2)(i2)
-    i2_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i2)
-    i2_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i2_aug) 
-    spec2 = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i2_aug)
 
-    i3 = get_melspectrogram_layer(input_shape=input_shape,
-                                n_mels=n_mels,
-                                pad_end=True,
-                                n_fft=n_fft,
-                                win_length=int(100 * sr / 1000),
-                                hop_length=int(50 * sr / 1000),
-                                sample_rate=sr,
-                                return_decibel=True,
-                                input_data_format='channels_last',
-                                output_data_format='channels_last',
-                                name='mel3')(normalized_input)
-    i3 = LayerNormalization(axis=2)(i3)
-    i3_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i3)
-    i3_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i3_aug) 
-    spec3 = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i3_aug)
+    melspec_head_outputs = getMelSpecs(
+                                input_shape, 
+                                normalized_input, 
+                                n_fft=n_fft, 
+                                sr=sr, 
+                                spectrogram_width=spectrogram_width, 
+                                n_mels=n_mels, 
+                                batch_size=batch_size, 
+                                mask_pct=mask_pct, 
+                                mask_thresh=mask_thresh)
+
+    
+    # i1 = get_melspectrogram_layer(input_shape=input_shape,
+    #                             n_mels=n_mels,
+    #                             pad_end=True,
+    #                             n_fft=n_fft,
+    #                             win_length=int(25 * sr / 1000),
+    #                             hop_length=int(10 * sr / 1000),
+    #                             sample_rate=sr,
+    #                             return_decibel=True,
+    #                             input_data_format='channels_last',
+    #                             output_data_format='channels_last',
+    #                             name='mel1')(normalized_input)
+    # i1 = LayerNormalization(axis=2)(i1)
+    # i1_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i1)
+    # i1_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i1_aug) 
+    # spec1 = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i1_aug)
+    
+    # i2 = get_melspectrogram_layer(input_shape=input_shape,
+    #                             n_mels=n_mels,
+    #                             pad_end=True,
+    #                             n_fft=n_fft,
+    #                             win_length=int(50 * sr / 1000),
+    #                             hop_length=int(25 * sr / 1000),
+    #                             sample_rate=sr,
+    #                             return_decibel=True,
+    #                             input_data_format='channels_last',
+    #                             output_data_format='channels_last',
+    #                             name='mel2')(normalized_input)
+    # i2 = LayerNormalization(axis=2)(i2)
+    # i2_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i2)
+    # i2_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i2_aug) 
+    # spec2 = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i2_aug)
+
+    # i3 = get_melspectrogram_layer(input_shape=input_shape,
+    #                             n_mels=n_mels,
+    #                             pad_end=True,
+    #                             n_fft=n_fft,
+    #                             win_length=int(100 * sr / 1000),
+    #                             hop_length=int(50 * sr / 1000),
+    #                             sample_rate=sr,
+    #                             return_decibel=True,
+    #                             input_data_format='channels_last',
+    #                             output_data_format='channels_last',
+    #                             name='mel3')(normalized_input)
+    # i3 = LayerNormalization(axis=2)(i3)
+    # i3_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i3)
+    # i3_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i3_aug) 
+    # spec3 = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i3_aug)
 
     if backbone == 'trigru':
-        reshape1 = layers.Reshape((-1, n_mels))(i1_aug)
-        gru1 = layers.Bidirectional(layers.GRU(512, return_sequences=True))(reshape1)
-        gru1 = layers.Bidirectional(layers.GRU(256, return_sequences=False))(gru1)
+        gru_outputs = []
+        for melspec in melspec_head_outputs:
+            reshape1 = layers.Reshape((-1, n_mels))(melspec)
+            gru = layers.Bidirectional(layers.GRU(512, return_sequences=True))(reshape1)
+            gru = layers.Bidirectional(layers.GRU(256, return_sequences=False))(gru)
+            gru_outputs.append(gru)
         
-        reshape2 = layers.Reshape((-1, n_mels))(i2_aug)
-        gru2 = layers.Bidirectional(layers.GRU(512, return_sequences=True))(reshape2)
-        gru2 = layers.Bidirectional(layers.GRU(256, return_sequences=False))(gru2)
-        
-        reshape3 = layers.Reshape((-1, n_mels))(i3_aug)
-        gru3 = layers.Bidirectional(layers.GRU(512, return_sequences=True))(reshape3)
-        gru3 = layers.Bidirectional(layers.GRU(256, return_sequences=False))(gru3)
-        
-        x = layers.concatenate([gru1, gru2, gru3])
+        x = layers.concatenate(gru_outputs)
         x = layers.Flatten()(x)
     else:
-        spec1 = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i1_aug)
-        spec2 = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i2_aug)
-        spec3 = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i3_aug)
-
-        x = layers.concatenate([spec1, spec2, spec3])
+        x = layers.concatenate(melspec_head_outputs)
 
         if backbone == 'densenet201':
             bb = tf.keras.applications.DenseNet201(include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None)
@@ -239,7 +265,7 @@ def TriMelspecModel(
                 # efficientnetv2-l does not need globalaveragepooling as they already do the flatten for us
                 x = layers.GlobalAveragePooling2D(name='avgpool')(x)
 
-    x = HeadModule(dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)(x)
+    x = HeadModule(x, dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)
 
     o = layers.Dense(n_classes, activation='softmax', name='softmax')(x)
 
@@ -316,6 +342,8 @@ def TriSpecModel(
     i3_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i3)
     i3_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i3_aug) 
 
+    
+
     if backbone == 'trigru':
         reshape1 = layers.Reshape((-1, int(n_fft/2+1)))(i1_aug)
         gru1 = layers.Bidirectional(layers.GRU(512, return_sequences=True))(reshape1)
@@ -367,7 +395,7 @@ def TriSpecModel(
                 # efficientnetv2-l does not need globalaveragepooling as they already do the flatten for us
                 x = layers.GlobalAveragePooling2D(name='avgpool')(x)
 
-    x = HeadModule(dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)(x)
+    x = HeadModule(x, dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)
 
     o = layers.Dense(n_classes, activation='softmax', name='softmax')(x)
 
@@ -450,7 +478,7 @@ def SingleMelspecUpscaleModel(
             # efficientnetv2-l does not need globalaveragepooling as they already do the flatten for us
             x = layers.GlobalAveragePooling2D(name='avgpool')(x)
     
-    x = HeadModule(dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)(x)
+    x = HeadModule(x, dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)
 
     o = layers.Dense(n_classes, activation='softmax', activity_regularizer=l2(l2_lambda), name='logits')(x)
 
@@ -599,7 +627,7 @@ def WavegramCNN(
             # efficientnetv2-l does not need globalaveragepooling as they already do the flatten for us
             x = layers.GlobalAveragePooling2D(name='avgpool')(x)
 
-    x = HeadModule(dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)(x)
+    x = HeadModule(x, dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)
 
     o = layers.Dense(n_classes, activation='softmax', name='softmax')(x)
 
