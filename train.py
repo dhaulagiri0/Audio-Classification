@@ -14,6 +14,10 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from models import TriMelspecModel, EnsembleModel, TriSpecModel, WavegramCNN
 from glob import glob
+from tensorflow.keras import mixed_precision
+
+policy = mixed_precision.Policy('mixed_float16')
+mixed_precision.set_global_policy(policy)
 
 class DataGenerator(tf.keras.utils.Sequence):
     def __init__(self, wav_paths, labels, sr, dt, n_classes,

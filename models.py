@@ -10,6 +10,10 @@ from tensorflow.keras.models import load_model
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 import tensorflow_hub as hub
+from tensorflow.keras import mixed_precision
+
+policy = mixed_precision.Policy('mixed_float16')
+mixed_precision.set_global_policy(policy)
 
 def norm_fn(x):
     x = tf.cast(x, tf.float32)
@@ -175,55 +179,6 @@ def TriMelspecModel(
                                 mask_pct=mask_pct, 
                                 mask_thresh=mask_thresh)
 
-    
-    # i1 = get_melspectrogram_layer(input_shape=input_shape,
-    #                             n_mels=n_mels,
-    #                             pad_end=True,
-    #                             n_fft=n_fft,
-    #                             win_length=int(25 * sr / 1000),
-    #                             hop_length=int(10 * sr / 1000),
-    #                             sample_rate=sr,
-    #                             return_decibel=True,
-    #                             input_data_format='channels_last',
-    #                             output_data_format='channels_last',
-    #                             name='mel1')(normalized_input)
-    # i1 = LayerNormalization(axis=2)(i1)
-    # i1_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i1)
-    # i1_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i1_aug) 
-    # spec1 = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i1_aug)
-    
-    # i2 = get_melspectrogram_layer(input_shape=input_shape,
-    #                             n_mels=n_mels,
-    #                             pad_end=True,
-    #                             n_fft=n_fft,
-    #                             win_length=int(50 * sr / 1000),
-    #                             hop_length=int(25 * sr / 1000),
-    #                             sample_rate=sr,
-    #                             return_decibel=True,
-    #                             input_data_format='channels_last',
-    #                             output_data_format='channels_last',
-    #                             name='mel2')(normalized_input)
-    # i2 = LayerNormalization(axis=2)(i2)
-    # i2_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i2)
-    # i2_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i2_aug) 
-    # spec2 = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i2_aug)
-
-    # i3 = get_melspectrogram_layer(input_shape=input_shape,
-    #                             n_mels=n_mels,
-    #                             pad_end=True,
-    #                             n_fft=n_fft,
-    #                             win_length=int(100 * sr / 1000),
-    #                             hop_length=int(50 * sr / 1000),
-    #                             sample_rate=sr,
-    #                             return_decibel=True,
-    #                             input_data_format='channels_last',
-    #                             output_data_format='channels_last',
-    #                             name='mel3')(normalized_input)
-    # i3 = LayerNormalization(axis=2)(i3)
-    # i3_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i3)
-    # i3_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i3_aug) 
-    # spec3 = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mels)(i3_aug)
-
     if backbone == 'trigru':
         gru_outputs = []
         for melspec in melspec_head_outputs:
@@ -239,6 +194,7 @@ def TriMelspecModel(
 
         if backbone == 'densenet201':
             bb = tf.keras.applications.DenseNet201(include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None)
+            print(bb.dtype_policy)
         if backbone == 'resnet152':
             bb = tf.keras.applications.ResNet152(include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None)
         if backbone == 'densenet169':
@@ -266,8 +222,9 @@ def TriMelspecModel(
                 x = layers.GlobalAveragePooling2D(name='avgpool')(x)
 
     x = HeadModule(x, dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)
-
+    print(x.dtype_policy)
     o = layers.Dense(n_classes, activation='softmax', name='softmax')(x)
+    print(o.dtype_policy)
 
     model = Model(inputs=input_layer, outputs=o, name='model')
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
@@ -342,7 +299,7 @@ def TriSpecModel(
     i3_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i3)
     i3_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i3_aug) 
 
-    
+
 
     if backbone == 'trigru':
         reshape1 = layers.Reshape((-1, int(n_fft/2+1)))(i1_aug)
