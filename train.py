@@ -165,9 +165,7 @@ def train(args):
                 mask_thresh=args.mask_thresh,
                 activation=args.activation
             )
-
-        if args.weights:
-            model.load_weights(args.weights)        
+      
 
     wav_paths = glob(f'{args.src_root}/**', recursive=True)
     wav_paths = [x.replace(os.sep, '/') for x in wav_paths if '.wav' in x]
