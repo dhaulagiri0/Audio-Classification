@@ -21,7 +21,7 @@ import tensorflow_hub as hub
 import librosa
 import numpy as np
 
-def pitch_shift_numpy(x, curr_n_steps, sampling_rate, n_steps=3):
+def pitch_shift_numpy(x, sampling_rate, n_steps=3):
     x = np.array(x)
     x = np.squeeze(x)
     curr_n_steps = int(tf.random.uniform(shape=(), minval=0, maxval=1) * n_steps) 
@@ -55,15 +55,15 @@ class DataGenerator(tf.keras.utils.Sequence):
         Y = np.empty((self.batch_size, self.n_classes), dtype=np.float32)
 
         for i, (path, label) in enumerate(zip(wav_paths, labels)):
-            rate, wav = wavfile.read(path)
-            wave = wav.reshape(-1, 1)
+            rate, wave = wavfile.read(path)
+            wave = wave.astype('float32')
             Y[i,] = to_categorical(label, num_classes=self.n_classes)
 
-            c = tf.random.uniform(shape=(), min_val=0, max_val=1, dtype=tf.float16)
+            c = tf.random.uniform(shape=(), minval=0, maxval=1, dtype=tf.float16)
             if c <= self.percentage:
-                X[i,] = pitch_shift_numpy(wave, sampling_rate=self.sr)
+                X[i,] = pitch_shift_numpy(wave, sampling_rate=self.sr).reshape(-1, 1)
             else:
-                X[i,] = wave
+                X[i,] = wave.reshape(-1, 1)
 
         return X, Y
 
