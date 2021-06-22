@@ -146,10 +146,10 @@ def ChangeModelLogits(model, n_classes, learning_rate):
     input = model.input
     output = layers.Dense(n_classes, activation='softmax', name='softmax')(model.layers[-2].output)
     new_model = Model(input, output)
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+    new_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
                 loss='categorical_crossentropy',
                 metrics=['accuracy'])
-    model.summary()
+    new_model.summary()
     return new_model
 
 def TriMelspecModel(
