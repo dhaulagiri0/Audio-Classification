@@ -14,7 +14,7 @@ from kapre.time_frequency import STFT, Magnitude, ApplyFilterbank, MagnitudeToDe
 from scipy.io import wavfile
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
-from models import TriMelspecModel, EnsembleModel, TriSpecModel, WavegramCNN, mish, ChangeModelLogits
+from models import TriMelspecModel, EnsembleModel, TriSpecModel, WavegramCNN, mish, ChangeModelHead
 from augmentation_layers import RandomFreqMask, RandomTimeMask
 from glob import glob
 import tensorflow_hub as hub
@@ -93,7 +93,18 @@ def train(args):
                                 'mish':mish,
                                 'KerasLayer': KerasLayer})
         if args.new_n_classes:
-            model = ChangeModelLogits(model, args.new_n_classes, args.learning_rate)
+            model = ChangeModelHead(
+                model, 
+                args.new_n_classes, 
+                args.learning_rate,
+                dropout_1=args.dropout_1,
+                dropout_2=args.dropout_2,
+                dropout_3=args.dropout_3,
+                dense_1=args.dense_1,
+                dense_2=args.dense_2,
+                dense_3=args.dense_3,
+                l2_lambda=args.l2_lambda, 
+                activation=args.activation)
     else:
         if args.model == 'trimelspec':
             model = TriMelspecModel(
