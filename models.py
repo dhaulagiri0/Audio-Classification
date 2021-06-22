@@ -225,7 +225,7 @@ def TriMelspecModel(
     input_shape = (int(sr*dt), 1)
     input_layer = layers.Input(input_shape)
 
-    normalized_input = layers.Lambda(norm_fn)(input_shape)
+    normalized_input = layers.Lambda(norm_fn)(input_layer)
 
     melspec_head_outputs = getMelSpecs(
                                 input_shape, 
@@ -318,7 +318,7 @@ def TriMFCCModel(
     input_shape = (int(sr*dt), 1)
     input_layer = layers.Input(input_shape)
 
-    normalized_input = layers.Lambda(norm_fn)(input_shape)
+    normalized_input = layers.Lambda(norm_fn)(input_layer)
 
     mfcc_head_outputs = getMFCCs(
                                 input_shape, 
