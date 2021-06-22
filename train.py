@@ -51,7 +51,10 @@ class DataGenerator(tf.keras.utils.Sequence):
         self.n_classes = n_classes
         self.batch_size = batch_size
         self.shuffle = shuffle
-        self.augment = Augment(augs)
+        if augs:
+            self.augment = Augment(augs)
+        else:
+            self.augs = None
         self.on_epoch_end()
 
     def __len__(self):
@@ -82,7 +85,6 @@ class DataGenerator(tf.keras.utils.Sequence):
         if self.shuffle:
             np.random.shuffle(self.indexes)
         
-
 
 def train(args):
     n_classes = len(os.listdir(args.src_root))
@@ -237,8 +239,8 @@ def train(args):
     with open(args.augs) as f:
         augs = yaml.safe_load(f)
 
-    tg = DataGenerator(wav_train, label_train, args.sr, args.dt, n_classes, batch_size=args.batch_size, percentage=0.8, augs=augs)
-    vg = DataGenerator(wav_val, label_val, args.sr, args.dt, n_classes, batch_size=args.validation_batch_size, percentage=0.0)
+    tg = DataGenerator(wav_train, label_train, args.sr, args.dt, n_classes, batch_size=args.batch_size, augs=augs)
+    vg = DataGenerator(wav_val, label_val, args.sr, args.dt, n_classes, batch_size=args.validation_batch_size)
     runtime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + '_' + args.run_name
     cp_best_val_acc = ModelCheckpoint(os.path.join(args.output_root, runtime, 'best_val_acc.h5'), monitor='val_accuracy',
                          save_best_only=True, save_weights_only=False,
