@@ -142,6 +142,12 @@ def EnsembleModel(
     model.summary()
     return model
 
+def ChangeModelLogits(model, n_classes):
+    input = model.input
+    outputs = layers.Dense(n_classes, activation='softmax', name='softmax')(model.layers[-2].output)
+    new_model = Model(input, outputs)
+    return new_model
+
 def TriMelspecModel(
     n_classes=13, 
     sr=22050, 
