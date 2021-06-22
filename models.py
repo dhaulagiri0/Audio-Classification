@@ -13,6 +13,14 @@ import tensorflow_hub as hub
 from tensorflow.keras import mixed_precision
 
 
+def time_shift_fn(x):
+    chance = 0.8
+    shift = tf.random.uniform(1, minval=1000, maxval=20050)
+    c = tf.random.uniform(1, minval=0, maxval=1)
+    if c <= chance:
+        x = tf.roll(x, shift, axis=1)
+    return x
+
 def noise_fn(x):
     chance = 0.8
     factor = .5
@@ -190,7 +198,8 @@ def TriMelspecModel(
     input_layer = layers.Input(input_shape)
 
     noise = layers.Lambda(noise_fn)(input_layer)
-    normalized_input = layers.Lambda(norm_fn)(noise)
+    shift = layers.Lambda(time_shift_fn)(noise)
+    normalized_input = layers.Lambda(norm_fn)(shift)
 
     melspec_head_outputs = getMelSpecs(
                                 input_shape, 
