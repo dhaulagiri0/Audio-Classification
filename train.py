@@ -93,7 +93,7 @@ def train(args):
                                 'mish':mish,
                                 'KerasLayer': KerasLayer})
         if args.new_n_classes:
-            model = ChangeModelLogits(model, args.new_n_classes)
+            model = ChangeModelLogits(model, args.new_n_classes, args.learning_rate)
     else:
         if args.model == 'trimelspec':
             model = TriMelspecModel(

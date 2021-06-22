@@ -142,10 +142,14 @@ def EnsembleModel(
     model.summary()
     return model
 
-def ChangeModelLogits(model, n_classes):
+def ChangeModelLogits(model, n_classes, learning_rate):
     input = model.input
-    outputs = layers.Dense(n_classes, activation='softmax', name='softmax')(model.layers[-2].output)
-    new_model = Model(input, outputs)
+    output = layers.Dense(n_classes, activation='softmax', name='softmax')(model.layers[-2].output)
+    new_model = Model(input, output)
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+                loss='categorical_crossentropy',
+                metrics=['accuracy'])
+    model.summary()
     return new_model
 
 def TriMelspecModel(
