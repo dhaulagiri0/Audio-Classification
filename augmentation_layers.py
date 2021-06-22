@@ -32,7 +32,7 @@ class RandomNoise(PreprocessingLayer):
     self.percentage = percentage
     self.factor = factor
     self._rng = make_generator(self.seed)
-    self.input_spec = InputSpec(ndim=4)
+    self.input_spec = InputSpec(ndim=3)
 
   def call(self, inputs, training=True):
     if training is None:
@@ -40,12 +40,13 @@ class RandomNoise(PreprocessingLayer):
 
     if self._rng.uniform(shape=()) > self.percentage:
       return inputs  
-
-    def noise_fn(x):
-        noise = tf.random.normal(x.shape)
+  
+    def noise_fn():
+        input = inputs
+        noise = tf.random.normal((input.shape[-2], 1))
         # noise = np.random.randn(len(data))
-        x = x + self.factor * noise
-        return x
+        input = input + self.factor * noise
+        return input
 
     output = control_flow_util.smart_cond(training, noise_fn, lambda: inputs)
 
@@ -77,7 +78,7 @@ class RandomTimeShift(PreprocessingLayer):
     self.percentage = percentage
     self.max_shift = max_shift
     self._rng = make_generator(self.seed)
-    self.input_spec = InputSpec(ndim=4)
+    self.input_spec = InputSpec(ndim=3)
 
   def call(self, inputs, training=True):
     if training is None:
@@ -86,10 +87,11 @@ class RandomTimeShift(PreprocessingLayer):
     if self._rng.uniform(shape=()) > self.percentage:
       return inputs  
 
-    def time_shift_fn(x):
-        shift = tf.random.uniform(1, minval=0, maxval=self.max_shift)
-        x = tf.roll(x, shift, axis=1)
-        return x
+    def time_shift_fn():
+        input = inputs
+        shift = tf.random.uniform(shape=(), minval=0, maxval=self.max_shift, dtype=tf.int32)
+        input = tf.roll(input, shift, axis=-2)
+        return input
 
     output = control_flow_util.smart_cond(training, time_shift_fn, lambda: inputs)
 
