@@ -15,7 +15,7 @@ from scipy.io import wavfile
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from models import TriMelspecModel, EnsembleModel, TriSpecModel, WavegramCNN, mish, ChangeModelHead
-from augmentation_layers import RandomFreqMask, RandomTimeMask
+from augmentation_layers import RandomFreqMask, RandomTimeMask, RandomNoise, RandomTimeShift
 from glob import glob
 import tensorflow_hub as hub
 import librosa
@@ -106,7 +106,9 @@ def train(args):
                                 'RandomTimeMask': RandomTimeMask,
                                 'RandomFreqMask': RandomFreqMask,
                                 'mish':mish,
-                                'KerasLayer': KerasLayer})
+                                'KerasLayer': KerasLayer,
+                                'RandomNoise':RandomNoise,
+                                'RandomTimeShift': RandomTimeShift})
         if args.new_n_classes:
             model = ChangeModelHead(
                 model, 

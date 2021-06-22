@@ -4,7 +4,7 @@ from tensorflow.keras.models import load_model
 from clean import downsample_mono, envelope
 from kapre.time_frequency import STFT, Magnitude, ApplyFilterbank, MagnitudeToDecibel
 from sklearn.preprocessing import LabelEncoder
-from augmentation_layers import RandomFreqMask, RandomTimeMask
+from augmentation_layers import RandomFreqMask, RandomTimeMask, RandomNoise, RandomTimeShift
 import numpy as np
 from glob import glob
 import argparse
@@ -36,7 +36,9 @@ def predict_test(args):
                       'RandomTimeMask': RandomTimeMask,
                       'RandomFreqMask': RandomFreqMask,
                       'mish':mish,
-                      'KerasLayer': KerasLayer})
+                      'KerasLayer': KerasLayer,
+                      'RandomNoise':RandomNoise,
+                      'RandomTimeShift': RandomTimeShift})
 
     wav_paths = glob('{}/**'.format(args.src_dir), recursive=True)
     wav_paths = sorted([x.replace(os.sep, '/') for x in wav_paths if '.wav' in x])
