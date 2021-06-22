@@ -144,8 +144,9 @@ def EnsembleModel(
 
 def ChangeModelHead(model, n_classes, learning_rate, dropout_1, dropout_2, dropout_3, dropout_4, dense_1, dense_2, dense_3, l2_lambda, activation):
     input = model.input
-    output = layers.Dense(n_classes, activation='softmax', name='softmax')(model.layers[-2].output)
-    output = HeadModule(output, dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)
+    x = model.layers[-3].output
+    x = HeadModule(x, dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)
+    output = layers.Dense(n_classes, activation='softmax', name='softmax')(x)
     new_model = Model(input, output)
     new_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
                 loss='categorical_crossentropy',

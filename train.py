@@ -100,6 +100,7 @@ def train(args):
                 dropout_1=args.dropout_1,
                 dropout_2=args.dropout_2,
                 dropout_3=args.dropout_3,
+                dropout_4=args.dropout_4,
                 dense_1=args.dense_1,
                 dense_2=args.dense_2,
                 dense_3=args.dense_3,
