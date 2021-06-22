@@ -19,6 +19,95 @@ def make_generator(seed=None):
   else:
     return tf.random.Generator.from_non_deterministic_state()
 
+class RandomNoise(PreprocessingLayer):
+
+  def __init__(self,
+               percentage=0.8,
+               factor=0.5,
+               seed=None,
+               **kwargs):
+    super(RandomNoise, self).__init__(**kwargs)
+
+    self.seed = seed
+    self.percentage = percentage
+    self.factor = factor
+    self._rng = make_generator(self.seed)
+    self.input_spec = InputSpec(ndim=4)
+
+  def call(self, inputs, training=True):
+    if training is None:
+      training = backend.learning_phase()
+
+    if self._rng.uniform(shape=()) > self.percentage:
+      return inputs  
+
+    def noise_fn(x):
+        noise = tf.random.normal(x.shape)
+        # noise = np.random.randn(len(data))
+        x = x + self.factor * noise
+        return x
+
+    output = control_flow_util.smart_cond(training, noise_fn, lambda: inputs)
+
+    output.set_shape(inputs.shape)
+    return output
+
+  def compute_output_shape(self, input_shape):
+    return input_shape
+
+  def get_config(self):
+    config = {
+        'seed': self.seed,
+        'percentage': self.percentage,
+        'factor': self.factor
+    }
+    base_config = super().get_config()
+    return dict(list(base_config.items()) + list(config.items()))
+
+class RandomTimeShift(PreprocessingLayer):
+
+  def __init__(self,
+               percentage=0.8,
+               max_shift=22050,
+               seed=None,
+               **kwargs):
+    super(RandomTimeShift, self).__init__(**kwargs)
+
+    self.seed = seed
+    self.percentage = percentage
+    self.max_shift = max_shift
+    self._rng = make_generator(self.seed)
+    self.input_spec = InputSpec(ndim=4)
+
+  def call(self, inputs, training=True):
+    if training is None:
+      training = backend.learning_phase()
+
+    if self._rng.uniform(shape=()) > self.percentage:
+      return inputs  
+
+    def time_shift_fn(x):
+        shift = tf.random.uniform(1, minval=0, maxval=self.max_shift)
+        x = tf.roll(x, shift, axis=1)
+        return x
+
+    output = control_flow_util.smart_cond(training, time_shift_fn, lambda: inputs)
+
+    output.set_shape(inputs.shape)
+    return output
+
+  def compute_output_shape(self, input_shape):
+    return input_shape
+
+  def get_config(self):
+    config = {
+        'seed': self.seed,
+        'percentage': self.percentage,
+        'max_shift': self.max_shift
+    }
+    base_config = super().get_config()
+    return dict(list(base_config.items()) + list(config.items()))
+
 class RandomFreqMask(PreprocessingLayer):
 
   def __init__(self,

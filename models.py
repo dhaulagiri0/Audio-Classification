@@ -5,7 +5,7 @@ from tensorflow.keras.regularizers import l2
 from kapre.composed import get_melspectrogram_layer, get_stft_magnitude_layer
 from kapre.time_frequency import STFT, Magnitude, ApplyFilterbank, MagnitudeToDecibel
 from tensorflow.python.keras.backend import dropout
-from augmentation_layers import RandomFreqMask, RandomTimeMask
+from augmentation_layers import RandomFreqMask, RandomTimeMask, RandomNoise, RandomTimeShift
 from tensorflow.keras.models import load_model
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
@@ -13,23 +13,23 @@ import tensorflow_hub as hub
 from tensorflow.keras import mixed_precision
 
 
-def time_shift_fn(x):
-    chance = 0.8
-    shift = tf.random.uniform(1, minval=1000, maxval=20050)
-    c = tf.random.uniform(1, minval=0, maxval=1)
-    if c <= chance:
-        x = tf.roll(x, shift, axis=1)
-    return x
+# def time_shift_fn(x):
+#     chance = 0.8
+#     shift = tf.random.uniform(1, minval=1000, maxval=20050)
+#     c = tf.random.uniform(1, minval=0, maxval=1)
+#     if c <= chance:
+#         x = tf.roll(x, shift, axis=1)
+#     return x
 
-def noise_fn(x):
-    chance = 0.8
-    factor = .5
-    c = tf.random.uniform(1, minval=0, maxval=1)
-    if c <= chance:
-        noise = tf.random.normal(x.shape)
-        # noise = np.random.randn(len(data))
-        x = x + factor * noise
-    return x
+# def noise_fn(x):
+#     chance = 0.8
+#     factor = .5
+#     c = tf.random.uniform(1, minval=0, maxval=1)
+#     if c <= chance:
+#         noise = tf.random.normal(x.shape)
+#         # noise = np.random.randn(len(data))
+#         x = x + factor * noise
+#     return x
 
 def norm_fn(x):
     x = tf.cast(x, tf.float32)
@@ -164,8 +164,8 @@ def ChangeModelHead(model, n_classes, learning_rate, dropout_1, dropout_2, dropo
     input_shape = model.input.shape
     input = layers.Input(input_shape) 
     if new_augment:
-        input = layers.Lambda(noise_fn)(input)
-        input = layers.Lambda(time_shift_fn)(input)
+        input = RandomNoise()(input)
+        input = RandomTimeShift()(input)
     model = Model(model.input, model.layers[-3].output)
     x = model(input)
     x = HeadModule(x, dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)
@@ -202,8 +202,8 @@ def TriMelspecModel(
     input_shape = (int(sr*dt), 1)
     input_layer = layers.Input(input_shape)
 
-    noise = layers.Lambda(noise_fn)(input_layer)
-    shift = layers.Lambda(time_shift_fn)(noise)
+    noise = RandomNoise()(input_layer)
+    shift = RandomTimeShift()(noise)
     normalized_input = layers.Lambda(norm_fn)(shift)
 
     melspec_head_outputs = getMelSpecs(
