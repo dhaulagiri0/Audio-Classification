@@ -7,3 +7,4 @@ preds/
 *.pkl
 ray_results/
 scripts/
+.vscode

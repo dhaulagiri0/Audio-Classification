@@ -6,6 +6,7 @@ import warnings
 import os
 import datetime
 import pdb
+import yaml
 
 from tensorflow.keras.models import load_model
 from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau, EarlyStopping
@@ -20,16 +21,29 @@ from glob import glob
 import tensorflow_hub as hub
 import librosa
 import numpy as np
+import audiomentations
 
 def pitch_shift_numpy(x, sampling_rate, n_steps=3):
     x = np.array(x)
     x = np.squeeze(x)
-    curr_n_steps = int(tf.random.uniform(shape=(), minval=0, maxval=1) * n_steps) 
+    curr_n_steps = int(tf.random.uniform(shape=(), minval=0, maxval=1) * n_steps)
     return librosa.effects.pitch_shift(x, sampling_rate, curr_n_steps)
+
+class Augment:
+    def __init__(self, configs: dict):
+        augs = []
+        for augment_name, params in configs.items():
+            params.setdefault('p', 0.5)
+            AugmentClass = getattr(audiomentations, augment_name)
+            augs.append(AugmentClass(**params))
+        self.augmentor = audiomentations.Compose(augs)
+
+    def __call__(self, wav, sr):
+        return self.augmentor(wav, sr)
 
 class DataGenerator(tf.keras.utils.Sequence):
     def __init__(self, wav_paths, labels, sr, dt, n_classes,
-                 batch_size=32, shuffle=True, percentage=0.8):
+                 batch_size=32, shuffle=True, percentage=0.8, augs=None):
         self.wav_paths = wav_paths
         self.labels = labels
         self.sr = sr
@@ -37,9 +51,9 @@ class DataGenerator(tf.keras.utils.Sequence):
         self.n_classes = n_classes
         self.batch_size = batch_size
         self.shuffle = shuffle
-        self.percentage=percentage
+        self.percentage = percentage
+        self.augment = Augment(augs)
         self.on_epoch_end()
-
 
     def __len__(self):
         return int(np.floor(len(self.wav_paths) / self.batch_size))
@@ -57,6 +71,8 @@ class DataGenerator(tf.keras.utils.Sequence):
         for i, (path, label) in enumerate(zip(wav_paths, labels)):
             rate, wave = wavfile.read(path)
             wave = wave.astype('float32')
+            if self.augment:
+                wave = self.augment(wave, rate)
             Y[i,] = to_categorical(label, num_classes=self.n_classes)
 
             c = tf.random.uniform(shape=(), minval=0, maxval=1, dtype=tf.float16)
@@ -67,11 +83,11 @@ class DataGenerator(tf.keras.utils.Sequence):
 
         return X, Y
 
-
     def on_epoch_end(self):
         self.indexes = np.arange(len(self.wav_paths))
         if self.shuffle:
             np.random.shuffle(self.indexes)
+        
 
 
 def train(args):
@@ -224,7 +240,10 @@ def train(args):
     if len(set(label_val)) != n_classes:
         warnings.warn(f"Found {len(set(label_val))}/{n_classes} classes in validation data. Increase data size or change random_state.")
 
-    tg = DataGenerator(wav_train, label_train, args.sr, args.dt, n_classes, batch_size=args.batch_size, percentage=0.8)
+    with open(args.augs) as f:
+        augs = yaml.safe_load(f)
+
+    tg = DataGenerator(wav_train, label_train, args.sr, args.dt, n_classes, batch_size=args.batch_size, percentage=0.8, augs=augs)
     vg = DataGenerator(wav_val, label_val, args.sr, args.dt, n_classes, batch_size=args.validation_batch_size, percentage=0.0)
     runtime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + '_' + args.run_name
     cp_best_val_acc = ModelCheckpoint(os.path.join(args.output_root, runtime, 'best_val_acc.h5'), monitor='val_accuracy',
@@ -275,5 +294,6 @@ if __name__ == '__main__':
     parser.add_argument('--ensemble_paths', action='append')
     parser.add_argument('--return_decibel', type=bool, default=True)
     parser.add_argument('--new_n_classes', default=None, type=int, help='number of classes to predict')
+    parser.add_argument('--augs', default='augs.yaml', help='configurations for augmentations during training')
     args, _ = parser.parse_known_args()
     train(args)

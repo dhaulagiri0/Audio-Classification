@@ -1,0 +1,38 @@
+# List of augmentations and their params
+# in their order of application
+
+# probability of activation is denoted 'p', which defaults to 0.5 is not specified
+# set to 0 to deactivate and 1 to always activate
+
+Gain:
+  min_gain_in_db: -2
+  max_gain_in_db: 2
+
+PolarityInversion: # invert waveform, but sounds the same
+
+ClippingDistortion:
+  min_percentile_threshold: 0.0
+  max_percentile_threshold: 40.0
+  
+TimeStretch:
+  min_rate: 0.9
+  max_rate: 1.1
+
+PitchShift:
+  min_semitones: -6
+  max_semitones: 6
+
+AddImpulseResponse: # reverb effect, like those recorded in rooms
+    ir_path: ir
+    leave_length_unchanged: true
+
+AddGaussianNoise:
+  min_amplitude: 0.001
+  max_amplitude: 0.008
+
+Shift:
+  min_fraction: -0.01
+  max_fraction: 0.01
+  p: 0.5 # put 0 if we don't want it
+
+Mp3Compression: # damage quality
