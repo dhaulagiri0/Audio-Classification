@@ -165,7 +165,7 @@ def ChangeModelHead(model, n_classes, learning_rate, dropout_1, dropout_2, dropo
     input = layers.Input(input_shape) 
     if new_augment:
         x_aug = RandomNoise()(input)
-        x_aug = RandomTimeShift()(x_aug)
+        # x_aug = RandomTimeShift()(x_aug)
     model = Model(model.input, model.layers[-3].output)
     x = model(x_aug)
     x = HeadModule(x, dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)
@@ -203,7 +203,7 @@ def TriMelspecModel(
     input_layer = layers.Input(input_shape)
 
     noise = RandomNoise()(input_layer)
-    shift = RandomTimeShift()(noise)
+    # shift = RandomTimeShift()(noise)
     normalized_input = layers.Lambda(norm_fn)(shift)
 
     melspec_head_outputs = getMelSpecs(
