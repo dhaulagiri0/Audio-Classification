@@ -64,7 +64,11 @@ def predict_test(args):
         y_mean = np.mean(y_pred, axis=0)
         y_pred = np.argmax(y_mean)
 
-        classes = ['bird', 'eight', 'falcon', 'five', 'four', 'nine', 'one', 'seven', 'six', 'snake', 'three', 'two', 'zero']
+        # class list for s1
+        # classes = ['bird', 'eight', 'falcon', 'five', 'four', 'nine', 'one', 'seven', 'six', 'snake', 'three', 'two', 'zero']
+        
+        # class list for s2
+        classes = ['bird', 'cat', 'chicken', 'dog', 'down', 'eight', 'falcon', 'five', 'four', 'go', 'left', 'nine', 'one', 'right', 'seven', 'six', 'snake', 'stop', 'three', 'two', 'up', 'zero']
         
         pred = classes[y_pred]
         file_name = wav_paths[z].split('/')[-1]
