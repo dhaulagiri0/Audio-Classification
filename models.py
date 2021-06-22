@@ -13,6 +13,16 @@ import tensorflow_hub as hub
 from tensorflow.keras import mixed_precision
 
 
+def noise_fn(x):
+    chance = 0.8
+    factor = .5
+    c = tf.random.uniform(1, minval=0, maxval=1)
+    if c <= chance:
+        noise = tf.random.normal(x.shape)
+        # noise = np.random.randn(len(data))
+        x = x + factor * noise
+    return x
+
 def norm_fn(x):
     x = tf.cast(x, tf.float32)
     mins = tf.reduce_min(x, axis=[0, 1])
@@ -179,7 +189,8 @@ def TriMelspecModel(
     input_shape = (int(sr*dt), 1)
     input_layer = layers.Input(input_shape)
 
-    normalized_input = layers.Lambda(norm_fn)(input_layer)
+    noise = layers.Lambda(noise_fn)(input_layer)
+    normalized_input = layers.Lambda(norm_fn)(noise)
 
     melspec_head_outputs = getMelSpecs(
                                 input_shape, 
