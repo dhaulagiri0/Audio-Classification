@@ -18,10 +18,18 @@ from models import TriMelspecModel, EnsembleModel, TriSpecModel, WavegramCNN, mi
 from augmentation_layers import RandomFreqMask, RandomTimeMask
 from glob import glob
 import tensorflow_hub as hub
+import librosa
+import numpy as np
+
+def pitch_shift_numpy(x, curr_n_steps, sampling_rate, n_steps=3):
+    x = np.array(x)
+    x = np.squeeze(x)
+    curr_n_steps = int(tf.random.uniform(shape=(), minval=0, maxval=1) * n_steps) 
+    return librosa.effects.pitch_shift(x, sampling_rate, curr_n_steps)
 
 class DataGenerator(tf.keras.utils.Sequence):
     def __init__(self, wav_paths, labels, sr, dt, n_classes,
-                 batch_size=32, shuffle=True):
+                 batch_size=32, shuffle=True, percentage=0.8):
         self.wav_paths = wav_paths
         self.labels = labels
         self.sr = sr
@@ -29,6 +37,7 @@ class DataGenerator(tf.keras.utils.Sequence):
         self.n_classes = n_classes
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.percentage=percentage
         self.on_epoch_end()
 
 
@@ -47,8 +56,14 @@ class DataGenerator(tf.keras.utils.Sequence):
 
         for i, (path, label) in enumerate(zip(wav_paths, labels)):
             rate, wav = wavfile.read(path)
-            X[i,] = wav.reshape(-1, 1)
+            wave = wav.reshape(-1, 1)
             Y[i,] = to_categorical(label, num_classes=self.n_classes)
+
+            c = tf.random.uniform(shape=(), min_val=0, max_val=1, dtype=tf.float16)
+            if c <= self.percentage:
+                X[i,] = pitch_shift_numpy(wave, sampling_rate=self.sr)
+            else:
+                X[i,] = wave
 
         return X, Y
 
@@ -207,8 +222,8 @@ def train(args):
     if len(set(label_val)) != n_classes:
         warnings.warn(f"Found {len(set(label_val))}/{n_classes} classes in validation data. Increase data size or change random_state.")
 
-    tg = DataGenerator(wav_train, label_train, args.sr, args.dt, n_classes, batch_size=args.batch_size)
-    vg = DataGenerator(wav_val, label_val, args.sr, args.dt, n_classes, batch_size=args.validation_batch_size)
+    tg = DataGenerator(wav_train, label_train, args.sr, args.dt, n_classes, batch_size=args.batch_size, percentage=0.8)
+    vg = DataGenerator(wav_val, label_val, args.sr, args.dt, n_classes, batch_size=args.validation_batch_size, percentage=0.8)
     runtime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + '_' + args.run_name
     cp_best_val_acc = ModelCheckpoint(os.path.join(args.output_root, runtime, 'best_val_acc.h5'), monitor='val_accuracy',
                          save_best_only=True, save_weights_only=False,
