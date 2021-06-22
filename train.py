@@ -15,7 +15,7 @@ from kapre.time_frequency import STFT, Magnitude, ApplyFilterbank, MagnitudeToDe
 from scipy.io import wavfile
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
-from models import TriMelspecModel, EnsembleModel, TriSpecModel, WavegramCNN, mish, ChangeModelHead
+from models import TriMFCCModel, TriMelspecModel, EnsembleModel, TriSpecModel, WavegramCNN, mish, ChangeModelHead
 from augmentation_layers import RandomFreqMask, RandomTimeMask, RandomNoise, RandomTimeShift
 from glob import glob
 import tensorflow_hub as hub
@@ -120,9 +120,7 @@ def train(args):
                                 'RandomTimeMask': RandomTimeMask,
                                 'RandomFreqMask': RandomFreqMask,
                                 'mish':mish,
-                                'KerasLayer': KerasLayer,
-                                'RandomNoise':RandomNoise,
-                                'RandomTimeShift': RandomTimeShift})
+                                'KerasLayer': KerasLayer})
         if args.new_n_classes:
             model = ChangeModelHead(
                 model, 
@@ -185,7 +183,31 @@ def train(args):
                 activation=args.activation,
                 return_decibel=args.return_decibel
             )
-        else:
+        elif args.model == 'trimfcc':
+            model = TriMFCCModel(
+                n_classes=n_classes,
+                sr=args.sr,
+                dt=args.dt,
+                backbone=args.backbone,
+                n_mels=args.n_mels,
+                spectrogram_width=args.spectrogram_width,
+                n_fft=args.n_fft,
+                n_mfccs=args.n_mfccs,
+                dropout_1=args.dropout_1,
+                dropout_2=args.dropout_2,
+                dropout_3=args.dropout_3,
+                dropout_4=args.dropout_4,
+                dense_1=args.dense_1,
+                dense_2=args.dense_2,
+                dense_3=args.dense_3,
+                l2_lambda=args.l2_lambda,
+                learning_rate=args.learning_rate,
+                batch_size=args.batch_size,
+                mask_pct=args.mask_pct,
+                mask_thresh=args.mask_thresh,
+                activation=args.activation
+            )
+        elif args.model == 'wavegram':
             model = WavegramCNN(
                 n_classes=n_classes,
                 sr=args.sr,
@@ -275,6 +297,7 @@ if __name__ == '__main__':
     parser.add_argument('--spectrogram_width', type=int, default=250, help='width of resized spectrogram')
     parser.add_argument('--spectrogram_height', type=int, default=512)
     parser.add_argument('--n_fft', type=int, default=2048, help='number of fast fourier transform frequencies to analyze')
+    parser.add_argument('--n_mfccs', type=int, default=40, help='number of MFCCs to do on top of melspec')
     parser.add_argument('--dropout_1', type=float, default=0.2)
     parser.add_argument('--dropout_2', type=float, default=0.2)
     parser.add_argument('--dropout_3', type=float, default=0.0)

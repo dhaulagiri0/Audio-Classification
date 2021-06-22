@@ -1,3 +1,4 @@
+from kapre.signal import LogmelToMFCC
 from tensorflow.keras import layers
 from tensorflow.keras.layers import TimeDistributed, LayerNormalization
 from tensorflow.keras.models import Model
@@ -109,6 +110,31 @@ def getMelSpecs(input_shape, input, n_fft=2048, sr=22050, spectrogram_width=250,
         melspec_head_outputs.append(spec)
 
     return melspec_head_outputs
+
+def getMFCCs(input_shape, input, n_fft=2048, sr=22050, spectrogram_width=250, n_mels=128, n_mfccs=50, batch_size=26, mask_pct=0.3, mask_thresh=0.3):
+    mfcc_head_outputs = []
+    win_lengths = [25, 50, 100]
+    hop_lengths = [10, 25, 50]
+    for i in range(3):
+        i = get_melspectrogram_layer(input_shape=input_shape,
+                            n_mels=n_mels,
+                            pad_end=True,
+                            n_fft=n_fft,
+                            win_length=int(win_lengths[i] * sr / 1000),
+                            hop_length=int(hop_lengths[i] * sr / 1000),
+                            sample_rate=sr,
+                            return_decibel=True,
+                            input_data_format='channels_last',
+                            output_data_format='channels_last',
+                            name=f'mel{i + 1}')(input)
+        i = LogmelToMFCC(n_mfccs=n_mfccs, data_format='channels_last')(i)
+        i = LayerNormalization(axis=2)(i)
+        i_aug = RandomTimeMask(batch_size, mask_pct, mask_thresh)(i)
+        i_aug = RandomFreqMask(batch_size, mask_pct, mask_thresh)(i_aug) 
+        spec = layers.experimental.preprocessing.Resizing(spectrogram_width, n_mfccs)(i_aug)
+        mfcc_head_outputs.append(spec)
+
+    return mfcc_head_outputs
 
 def EnsembleModel(
     model_paths, 
@@ -227,6 +253,100 @@ def TriMelspecModel(
         x = layers.Flatten()(x)
     else:
         x = layers.concatenate(melspec_head_outputs)
+
+        if backbone == 'densenet201':
+            bb = tf.keras.applications.DenseNet201(include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None)
+        if backbone == 'resnet152':
+            bb = tf.keras.applications.ResNet152(include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None)
+        if backbone == 'densenet169':
+            bb = tf.keras.applications.DenseNet169(include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None)
+        if backbone == 'densenet121':
+            bb = tf.keras.applications.DenseNet121(include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None)
+        if backbone == 'efficientnetb7':
+            bb = tf.keras.applications.EfficientNetB7(include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None)
+        if backbone == 'efficientnetv2-l':
+            bb = hub.KerasLayer('gs://cloud-tpu-checkpoints/efficientnet/v2/hub/efficientnetv2-l/feature-vector', trainable=True)
+        if backbone == 'efficientnet-gru':
+            bb = tf.keras.applications.EfficientNetB7(include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None)(x)
+            bb = layers.Reshape((-1, bb.output_shape[-1]))(bb)
+            bb = layers.Bidirectional(layers.GRU(256, return_sequences=True))(bb)
+            x = layers.Bidirectional(layers.GRU(256))(bb)
+        elif backbone == 'densenet-gru':
+            bb = tf.keras.applications.DenseNet201(include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None)(x)
+            bb = layers.Reshape((-1, bb.output_shape[-1]))(bb)
+            bb = layers.GRU(256, return_sequences=True)(bb)
+            x = layers.GRU(256)(bb)
+        else:
+            x = bb(x)
+            if not backbone == 'efficientnetv2-l':
+                # efficientnetv2-l does not need globalaveragepooling as they already do the flatten for us
+                x = layers.GlobalAveragePooling2D(name='avgpool')(x)
+
+    x = HeadModule(x, dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)
+    o = layers.Dense(n_classes, activation='softmax', name='softmax')(x)
+
+    model = Model(inputs=input_layer, outputs=o, name='model')
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+    model.summary()
+    return model
+
+def TriMFCCModel(
+    n_classes=13, 
+    sr=22050, 
+    dt=1.0, 
+    backbone='densenet201', 
+    n_mels=128, 
+    spectrogram_width=250, 
+    n_fft=2048, 
+    n_mfccs=40,
+    dropout_1=0.2, 
+    dropout_2=0.2, 
+    dropout_3=0, 
+    dropout_4=0, 
+    dense_1=1024, 
+    dense_2=0, 
+    dense_3=0, 
+    l2_lambda=0.001, 
+    learning_rate=0.001, 
+    batch_size=26, 
+    mask_pct=0.2, 
+    mask_thresh=0.3, 
+    activation='relu'):
+
+    input_shape = (int(sr*dt), 1)
+    input_layer = layers.Input(input_shape)
+
+    normalized_input = layers.Lambda(norm_fn)(input_shape)
+
+    mfcc_head_outputs = getMFCCs(
+                                input_shape, 
+                                normalized_input, 
+                                n_fft=n_fft, 
+                                n_mfccs=n_mfccs,
+                                sr=sr, 
+                                spectrogram_width=spectrogram_width, 
+                                n_mels=n_mels, 
+                                batch_size=batch_size, 
+                                mask_pct=mask_pct, 
+                                mask_thresh=mask_thresh)
+
+    policy = mixed_precision.Policy('mixed_float16')
+    mixed_precision.set_global_policy(policy)
+
+    if backbone == 'trigru':
+        gru_outputs = []
+        for mfcc in mfcc_head_outputs:
+            reshape1 = layers.Reshape((-1, n_mels))(mfcc)
+            gru = layers.Bidirectional(layers.GRU(512, return_sequences=True))(reshape1)
+            gru = layers.Bidirectional(layers.GRU(256, return_sequences=False))(gru)
+            gru_outputs.append(gru)
+        
+        x = layers.concatenate(gru_outputs)
+        x = layers.Flatten()(x)
+    else:
+        x = layers.concatenate(mfcc_head_outputs)
 
         if backbone == 'densenet201':
             bb = tf.keras.applications.DenseNet201(include_top=False, weights='imagenet', input_shape=(spectrogram_width, n_mels, 3), pooling=None)
