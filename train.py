@@ -43,7 +43,7 @@ class Augment:
 
 class DataGenerator(tf.keras.utils.Sequence):
     def __init__(self, wav_paths, labels, sr, dt, n_classes,
-                 batch_size=32, shuffle=True, percentage=0.8, augs=None):
+                 batch_size=32, shuffle=True, augs=None):
         self.wav_paths = wav_paths
         self.labels = labels
         self.sr = sr
@@ -51,7 +51,6 @@ class DataGenerator(tf.keras.utils.Sequence):
         self.n_classes = n_classes
         self.batch_size = batch_size
         self.shuffle = shuffle
-        self.percentage = percentage
         self.augment = Augment(augs)
         self.on_epoch_end()
 
@@ -74,12 +73,7 @@ class DataGenerator(tf.keras.utils.Sequence):
             if self.augment:
                 wave = self.augment(wave, rate)
             Y[i,] = to_categorical(label, num_classes=self.n_classes)
-
-            c = tf.random.uniform(shape=(), minval=0, maxval=1, dtype=tf.float16)
-            if c <= self.percentage:
-                X[i,] = pitch_shift_numpy(wave, sampling_rate=self.sr).reshape(-1, 1)
-            else:
-                X[i,] = wave.reshape(-1, 1)
+            X[i,] = wave.reshape(-1, 1)
 
         return X, Y
 

@@ -160,14 +160,11 @@ def EnsembleModel(
     model.summary()
     return model
 
-def ChangeModelHead(model, n_classes, learning_rate, dropout_1, dropout_2, dropout_3, dropout_4, dense_1, dense_2, dense_3, l2_lambda, activation, new_augment=True):
+def ChangeModelHead(model, n_classes, learning_rate, dropout_1, dropout_2, dropout_3, dropout_4, dense_1, dense_2, dense_3, l2_lambda, activation):
     input_shape = model.input.shape[1:]
     input = layers.Input(input_shape) 
-    if new_augment:
-        x_aug = RandomNoise()(input)
-        x_aug = RandomTimeShift()(x_aug)
     model = Model(model.input, model.layers[-3].output)
-    x = model(x_aug)
+    x = model(input_shape)
     x = HeadModule(x, dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)
     output = layers.Dense(n_classes, activation='softmax', name='softmax')(x)
     new_model = Model(input, output)
@@ -202,9 +199,7 @@ def TriMelspecModel(
     input_shape = (int(sr*dt), 1)
     input_layer = layers.Input(input_shape)
 
-    noise = RandomNoise()(input_layer)
-    shift = RandomTimeShift()(noise)
-    normalized_input = layers.Lambda(norm_fn)(shift)
+    normalized_input = layers.Lambda(norm_fn)(input_shape)
 
     melspec_head_outputs = getMelSpecs(
                                 input_shape, 
