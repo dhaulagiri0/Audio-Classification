@@ -33,6 +33,8 @@ class Augment:
     def __init__(self, configs: dict):
         augs = []
         for augment_name, params in configs.items():
+            if not params: 
+                params = {}
             params.setdefault('p', 0.5)
             AugmentClass = getattr(audiomentations, augment_name)
             augs.append(AugmentClass(**params))
@@ -54,7 +56,7 @@ class DataGenerator(tf.keras.utils.Sequence):
         if augs:
             self.augment = Augment(augs)
         else:
-            self.augs = None
+            self.augment = None
         self.on_epoch_end()
 
     def __len__(self):

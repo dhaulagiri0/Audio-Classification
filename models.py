@@ -164,7 +164,7 @@ def ChangeModelHead(model, n_classes, learning_rate, dropout_1, dropout_2, dropo
     input_shape = model.input.shape[1:]
     input = layers.Input(input_shape) 
     model = Model(model.input, model.layers[-3].output)
-    x = model(input_shape)
+    x = model(input)
     x = HeadModule(x, dropout_1=dropout_1, dropout_2=dropout_2, dropout_3=dropout_3, dropout_4=dropout_4, dense_1=dense_1, dense_2=dense_2, dense_3=dense_3, l2_lambda=l2_lambda, activation=activation)
     output = layers.Dense(n_classes, activation='softmax', name='softmax')(x)
     new_model = Model(input, output)

@@ -22,10 +22,6 @@ PitchShift:
   min_semitones: -6
   max_semitones: 6
 
-AddImpulseResponse: # reverb effect, like those recorded in rooms
-    ir_path: ir
-    leave_length_unchanged: true
-
 AddGaussianNoise:
   min_amplitude: 0.001
   max_amplitude: 0.008
@@ -34,5 +30,3 @@ Shift:
   min_fraction: -0.01
   max_fraction: 0.01
   p: 0.5 # put 0 if we don't want it
-
-Mp3Compression: # damage quality
