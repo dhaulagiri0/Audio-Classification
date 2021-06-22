@@ -7,13 +7,17 @@ import os
 import datetime
 import pdb
 
+from tensorflow.keras.models import load_model
 from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau, EarlyStopping
 from tensorflow.keras.utils import to_categorical
+from kapre.time_frequency import STFT, Magnitude, ApplyFilterbank, MagnitudeToDecibel
 from scipy.io import wavfile
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
-from models import TriMelspecModel, EnsembleModel, TriSpecModel, WavegramCNN
+from models import TriMelspecModel, EnsembleModel, TriSpecModel, WavegramCNN, mish
+from augmentation_layers import RandomFreqMask, RandomTimeMask
 from glob import glob
+import tensorflow_hub as hub
 
 class DataGenerator(tf.keras.utils.Sequence):
     def __init__(self, wav_paths, labels, sr, dt, n_classes,
@@ -57,7 +61,7 @@ class DataGenerator(tf.keras.utils.Sequence):
 
 def train(args):
     n_classes = len(os.listdir(args.src_root))
-
+  
     if args.ensemble:
         model = EnsembleModel(
             model_paths=args.ensemble_paths,
@@ -74,7 +78,20 @@ def train(args):
             dense_1=args.dense_1,
             dense_2=args.dense_2,
             dense_3=args.dense_3,
-            activation=args.activation)
+            activation=args.activation) 
+        if args.weights:
+            model.load_weights(args.weights)
+    if args.weights:
+        KerasLayer = hub.KerasLayer('gs://cloud-tpu-checkpoints/efficientnet/v2/hub/efficientnetv2-l/feature-vector', trainable=True)
+        model = load_model(args.weights,
+                custom_objects={'STFT':STFT,
+                                'Magnitude':Magnitude,
+                                'ApplyFilterbank':ApplyFilterbank,
+                                'MagnitudeToDecibel':MagnitudeToDecibel,
+                                'RandomTimeMask': RandomTimeMask,
+                                'RandomFreqMask': RandomFreqMask,
+                                'mish':mish,
+                                'KerasLayer': KerasLayer})
     else:
         if args.model == 'trimelspec':
             model = TriMelspecModel(
