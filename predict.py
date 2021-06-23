@@ -70,8 +70,11 @@ def predict_test(args):
         # classes = ['bird', 'eight', 'falcon', 'five', 'four', 'nine', 'one', 'seven', 'six', 'snake', 'three', 'two', 'zero']
         
         # class list for s2
-        classes = ['bird', 'cat', 'chicken', 'dog', 'down', 'eight', 'falcon', 'five', 'four', 'go', 'left', 'nine', 'one', 'right', 'seven', 'six', 'snake', 'stop', 'three', 'two', 'up', 'zero']
+        # classes = ['bird', 'cat', 'chicken', 'dog', 'down', 'eight', 'falcon', 'five', 'four', 'go', 'left', 'nine', 'one', 'right', 'seven', 'six', 'snake', 'stop', 'three', 'two', 'up', 'zero']
         
+        # class list for s3
+        classes = ['backward', 'bird', 'cat', 'chicken', 'crocodile', 'dinosaur', 'dog', 'down', 'eight', 'elephant', 'falcon', 'five', 'forward', 'four', 'go', 'left', 'nine', 'one', 'right', 'seven', 'six', 'snake', 'stop', 'three', 'two', 'up', 'zero']
+
         pred = classes[y_pred]
         file_name = wav_paths[z].split('/')[-1]
         print('File: {} Predicted class: {}'.format(file_name, pred))
