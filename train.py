@@ -242,7 +242,7 @@ def train(args):
     labels = [os.path.split(x)[0].split('/')[-1] for x in wav_paths]
     labels = le.transform(labels)
 
-    if args.val_root:
+    if len(args.val_root) > 0:
         wav_val = glob(f'{args.val_root}/**', recursive=True)
         wav_val = [x.replace(os.sep, '/') for x in wav_val if '.wav' in x]
 
