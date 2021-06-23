@@ -30,3 +30,6 @@ Shift:
   min_fraction: -0.01
   max_fraction: 0.01
   p: 0.5 # put 0 if we don't want it
+  
+AddBackgroundNoise:
+  sounds_path: '/content/soundeffects'
